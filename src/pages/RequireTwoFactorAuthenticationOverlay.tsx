@@ -53,7 +53,7 @@ function RequireTwoFactorAuthenticationOverlay() {
     const [is2FARequiredBecauseOfXero = false] = useOnyx(ONYXKEYS.COLLECTION.POLICY, {selector: requires2FAForXeroSelector});
 
     const handleOnPress = () => {
-        Navigation.navigate(getTwoFactorAuthRoute());
+        Navigation.navigate(getTwoFactorAuthRoute(undefined, {forceSetup: true}));
     };
 
     if (!shouldShowRequire2FAPage || isIn2FASetupFlow) {

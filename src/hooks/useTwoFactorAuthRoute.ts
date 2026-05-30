@@ -5,7 +5,7 @@ import ROUTES, {DYNAMIC_ROUTES} from '@src/ROUTES';
 import useOnyx from './useOnyx';
 
 type TwoFactorAuthRouteResult = {
-    getTwoFactorAuthRoute: (backTo?: Route) => Route;
+    getTwoFactorAuthRoute: (backTo?: Route, options?: {forceSetup?: boolean}) => Route;
     is2FAEnabled: boolean;
 };
 
@@ -14,17 +14,19 @@ type TwoFactorAuthRouteResult = {
  * - 2FA already enabled  → static enabled page
  * - user not validated   → dynamic verify-account page
  * - otherwise            → dynamic setup (copy codes) page
- * @returns An object containing:
- *  - `getTwoFactorAuthRoute`: a function `(backTo?: Route) => Route` that computes the target route.
- *  - `is2FAEnabled`: whether the user already has 2FA enabled.
+ *
+ * Pass `{forceSetup: true}` from callers that force the user into the setup wizard
+ * (e.g. RequireTwoFactorAuthenticationOverlay): the account can be in a partial state
+ * where `requiresTwoFactorAuth` is true but setup never completed, and routing to the
+ * "enabled" page would leave the user stuck under the overlay.
  */
 function useTwoFactorAuthRoute(): TwoFactorAuthRouteResult {
     const [account] = useOnyx(ONYXKEYS.ACCOUNT);
 
     const is2FAEnabled = !!account?.requiresTwoFactorAuth;
 
-    const getTwoFactorAuthRoute = (backTo?: Route): Route => {
-        if (is2FAEnabled) {
+    const getTwoFactorAuthRoute = (backTo?: Route, options?: {forceSetup?: boolean}): Route => {
+        if (is2FAEnabled && !options?.forceSetup) {
             return ROUTES.SETTINGS_2FA_ENABLED;
         }
 
