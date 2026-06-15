@@ -443,7 +443,11 @@ function SearchAutocompleteList({
 
         const pushSection = (section: Section<AutocompleteListItem>) => {
             nextSections.push(section);
-            nextSuggestionsCount += section.data.filter((item) => item.keyForList !== CONST.SEARCH.SEARCH_ROUTER_ITEM_TYPE.FIND_ITEM).length;
+            // Navigation suggestions are not "search suggestions" — exclude them (like the FIND_ITEM row) so the
+            // existing suggestion count / a11y announcement for real search stays unchanged.
+            nextSuggestionsCount += section.data.filter(
+                (item) => item.keyForList !== CONST.SEARCH.SEARCH_ROUTER_ITEM_TYPE.FIND_ITEM && item.searchItemType !== CONST.SEARCH.SEARCH_ROUTER_ITEM_TYPE.NAVIGATE,
+            ).length;
         };
 
         if (searchQueryItems && searchQueryItems.length > 0) {

@@ -1,14 +1,18 @@
 import React from 'react';
 import {View} from 'react-native';
 import type {ValueOf} from 'type-fest';
+import Avatar from '@components/Avatar';
 import Icon from '@components/Icon';
 import BaseListItem from '@components/SelectionList/ListItem/BaseListItem';
 import type {ListItem, ListItemFocusEventHandler} from '@components/SelectionList/ListItem/types';
+import Text from '@components/Text';
 import TextWithTooltip from '@components/TextWithTooltip';
 import useTheme from '@hooks/useTheme';
 import useThemeStyles from '@hooks/useThemeStyles';
 import type {OptionData} from '@libs/ReportUtils';
-import type CONST from '@src/CONST';
+import CONST from '@src/CONST';
+import type {Route} from '@src/ROUTES';
+import type {Icon as IconType} from '@src/types/onyx/OnyxCommon';
 import type IconAsset from '@src/types/utils/IconAsset';
 
 type SearchQueryItem = ListItem & {
@@ -20,6 +24,21 @@ type SearchQueryItem = ListItem & {
     autocompleteID?: string;
     roomType?: ValueOf<typeof CONST.SEARCH.DATA_TYPES>;
     mapKey?: string;
+
+    /** Navigation suggestion: route to navigate to when pressed (omitted for create-menu rows that run an action). */
+    route?: Route;
+
+    /** Navigation suggestion category, used for ranking and for the Spend stale-header fix. */
+    navCategory?: ValueOf<typeof CONST.SEARCH.NAVIGATION_SUGGESTION_CATEGORY>;
+
+    /** Navigation suggestion: optional right-side decoration (tab label for Spend/Account, workspace name, etc.). */
+    rightText?: string;
+
+    /** Navigation suggestion: optional right-side icon (e.g. the Spend/Account tab icon). */
+    rightIcon?: IconAsset;
+
+    /** Navigation suggestion: optional right-side avatar (e.g. the workspace avatar). */
+    rightAvatar?: IconType;
 };
 
 type SearchQueryListItemProps = {
@@ -89,6 +108,27 @@ function SearchQueryListItem({item, isFocused, showTooltip, onSelectRow, onFocus
                         />
                     )}
                 </View>
+                {(!!item.rightText || !!item.rightIcon || !!item.rightAvatar) && (
+                    <View style={[styles.flexRow, styles.alignItemsCenter, styles.ml2]}>
+                        {!!item.rightAvatar && (
+                            <Avatar
+                                source={item.rightAvatar.source}
+                                name={item.rightAvatar.name}
+                                type={item.rightAvatar.type}
+                                size={CONST.AVATAR_SIZE.SMALL}
+                                avatarID={item.rightAvatar.id}
+                            />
+                        )}
+                        {!!item.rightIcon && !item.rightAvatar && (
+                            <Icon
+                                src={item.rightIcon}
+                                fill={theme.icon}
+                                small
+                            />
+                        )}
+                        {!!item.rightText && <Text style={[styles.textLabelSupporting, styles.ml1]}>{item.rightText}</Text>}
+                    </View>
+                )}
             </>
         </BaseListItem>
     );

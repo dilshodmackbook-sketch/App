@@ -6995,6 +6995,19 @@ const CONST = {
             SEARCH: 'searchItem',
             FIND_ITEM: 'findItem',
             ASK_CONCIERGE: 'askConcierge',
+            NAVIGATE: 'navigate',
+        },
+        // Navigation suggestions in the Search Router stay hidden until the query is longer than this,
+        // except when the query is an explicit navigation intent ("go" / "go to").
+        NAVIGATION_SUGGESTION_MIN_QUERY_LENGTH: 2,
+        NAVIGATION_SUGGESTION_MAX_RESULTS: 8,
+        // Ordering also reflects the spec's reading order (top-level → Spend → Account → Workspaces → Create).
+        NAVIGATION_SUGGESTION_CATEGORY: {
+            TOP_LEVEL: 'topLevel',
+            SPEND: 'spend',
+            ACCOUNT: 'account',
+            WORKSPACE: 'workspace',
+            CREATE: 'create',
         },
         SEARCH_USER_FRIENDLY_KEYS: {
             TYPE: 'type',

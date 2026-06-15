@@ -53,6 +53,7 @@ import {clearPendingRouterQuery, peekPendingRouterQuery} from './SearchRouterCon
 import {getContextualReportData, getContextualSearchAutocompleteKey, getContextualSearchQuery} from './SearchRouterUtils';
 import updateAutocompleteSubstitutionsForSelection from './updateAutocompleteSubstitutionsForSelection';
 import useAskConcierge from './useAskConcierge';
+import useNavigationSuggestions from './useNavigationSuggestions';
 
 const privateIsArchivedSelector = (nvp: {private_isArchived?: string} | undefined): boolean | undefined => !!nvp?.private_isArchived;
 
@@ -80,6 +81,7 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
     const listRef = useRef<SelectionListWithSectionsHandle>(null);
     const expensifyIcons = useMemoizedLazyExpensifyIcons(['MagnifyingGlass', 'ConciergeAvatar']);
     const {askConcierge, shouldShowAskConcierge} = useAskConcierge();
+    const getNavigationSuggestions = useNavigationSuggestions();
 
     const initialQuery = peekPendingRouterQuery();
 
@@ -121,6 +123,13 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
 
     const getAdditionalSections: GetAdditionalSectionsCallback = useCallback(
         ({recentReports}, sectionIndex) => {
+            // Navigation suggestions: surfaced once the query qualifies (length > 2, or an explicit
+            // "go" / "go to" intent). This is mutually exclusive with the empty-query contextual row below.
+            const navigationSuggestions = getNavigationSuggestions(textInputValue);
+            if (navigationSuggestions.length > 0) {
+                return [{sectionIndex, data: navigationSuggestions}];
+            }
+
             if (!contextualReportID) {
                 return undefined;
             }
@@ -208,6 +217,7 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
             ];
         },
         [
+            getNavigationSuggestions,
             contextualReportID,
             textInputValue,
             isSearchRouterDisplayed,
@@ -315,6 +325,21 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
             };
 
             if (isSearchQueryItem(item)) {
+                if (item.searchItemType === CONST.SEARCH.SEARCH_ROUTER_ITEM_TYPE.NAVIGATE) {
+                    backHistory(() => {
+                        onRouterClose();
+                        if (item.navCategory === CONST.SEARCH.NAVIGATION_SUGGESTION_CATEGORY.SPEND && item.searchQuery) {
+                            // Spend destinations are Search routes — clear the "submitted search" context so the
+                            // Spend header doesn't inherit a stale query from an earlier global search.
+                            setSearchContext(false);
+                            Navigation.navigate(ROUTES.SEARCH_ROOT.getRoute({query: item.searchQuery}));
+                        } else if (item.route) {
+                            Navigation.navigate(item.route);
+                        }
+                    });
+                    return;
+                }
+
                 if (!item.searchQuery) {
                     return;
                 }
