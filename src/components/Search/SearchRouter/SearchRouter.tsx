@@ -328,13 +328,19 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
                 if (item.searchItemType === CONST.SEARCH.SEARCH_ROUTER_ITEM_TYPE.NAVIGATE) {
                     backHistory(() => {
                         onRouterClose();
-                        if (item.navCategory === CONST.SEARCH.NAVIGATION_SUGGESTION_CATEGORY.SPEND && item.searchQuery) {
+                        if (item.onSelectAction) {
+                            // Create-menu rows run an action (open a flow) instead of navigating to a route.
+                            item.onSelectAction();
+                        } else if (item.navCategory === CONST.SEARCH.NAVIGATION_SUGGESTION_CATEGORY.SPEND && item.searchQuery) {
                             // Spend destinations are Search routes — clear the "submitted search" context so the
                             // Spend header doesn't inherit a stale query from an earlier global search.
                             setSearchContext(false);
                             Navigation.navigate(ROUTES.SEARCH_ROOT.getRoute({query: item.searchQuery}));
                         } else if (item.route) {
-                            Navigation.navigate(item.route);
+                            // Workspace rows reuse the same RHP screen across workspaces (only the policyID differs),
+                            // so force a replace — otherwise navigating from "Members of A" to "Members of B" is
+                            // deduped onto the already-active route and nothing happens.
+                            Navigation.navigate(item.route, {forceReplace: item.navCategory === CONST.SEARCH.NAVIGATION_SUGGESTION_CATEGORY.WORKSPACE});
                         }
                     });
                     return;

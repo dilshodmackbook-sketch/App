@@ -39,6 +39,9 @@ type SearchQueryItem = ListItem & {
 
     /** Navigation suggestion: optional right-side avatar (e.g. the workspace avatar). */
     rightAvatar?: IconType;
+
+    /** Navigation suggestion: action to run when pressed (create-menu rows that open a flow instead of navigating to a route). */
+    onSelectAction?: () => void;
 };
 
 type SearchQueryListItemProps = {
