@@ -34,4 +34,22 @@ function hasValidateCodeExtendedAccess(account: OnyxEntry<Account>): boolean {
     return false;
 }
 
-export default {isValidateCodeFormSubmitting, isDelegateOnlySubmitter, hasValidateCodeExtendedAccess};
+/**
+ * Whether the user is in the "forced" 2FA onboarding setup state: a guided-setup user whose
+ * backend record has 2FA setup in progress but who hasn't completed onboarding yet.
+ * This is the second clause of `shouldShowRequire2FAPage` and is true even when `requiresTwoFactorAuth` is true.
+ */
+function isForced2FAOnboardingSetup(account: OnyxEntry<Account>, hasCompletedGuidedSetupFlow: boolean | undefined): boolean {
+    return !!account?.twoFactorAuthSetupInProgress && !hasCompletedGuidedSetupFlow;
+}
+
+/**
+ * Pure computation of whether the RequireTwoFactorAuthenticationOverlay should be shown.
+ * Kept here (rather than only in the hook) so the navigation guard, the wizard pages and the
+ * onboarding router can share the exact same condition.
+ */
+function shouldShowRequire2FAPage(account: OnyxEntry<Account>, hasCompletedGuidedSetupFlow: boolean | undefined): boolean {
+    return (!!account?.needsTwoFactorAuthSetup && !account?.requiresTwoFactorAuth) || isForced2FAOnboardingSetup(account, hasCompletedGuidedSetupFlow);
+}
+
+export default {isValidateCodeFormSubmitting, isDelegateOnlySubmitter, hasValidateCodeExtendedAccess, isForced2FAOnboardingSetup, shouldShowRequire2FAPage};

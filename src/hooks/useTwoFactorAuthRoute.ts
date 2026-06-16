@@ -4,8 +4,17 @@ import type {Route} from '@src/ROUTES';
 import ROUTES, {DYNAMIC_ROUTES} from '@src/ROUTES';
 import useOnyx from './useOnyx';
 
+type GetTwoFactorAuthRouteOptions = {
+    /**
+     * Force the resolver to return a SET_UP_2FA_SCREENS member (the dynamic setup/verify flow) even when
+     * `requiresTwoFactorAuth` is already true. Used by the required-2FA overlay so the focused screen always
+     * becomes a setup screen, which is what lets the overlay dismiss itself.
+     */
+    forceSetup?: boolean;
+};
+
 type TwoFactorAuthRouteResult = {
-    getTwoFactorAuthRoute: (backTo?: Route) => Route;
+    getTwoFactorAuthRoute: (backTo?: Route, options?: GetTwoFactorAuthRouteOptions) => Route;
     is2FAEnabled: boolean;
 };
 
@@ -23,8 +32,8 @@ function useTwoFactorAuthRoute(): TwoFactorAuthRouteResult {
 
     const is2FAEnabled = !!account?.requiresTwoFactorAuth;
 
-    const getTwoFactorAuthRoute = (backTo?: Route): Route => {
-        if (is2FAEnabled) {
+    const getTwoFactorAuthRoute = (backTo?: Route, options?: GetTwoFactorAuthRouteOptions): Route => {
+        if (is2FAEnabled && !options?.forceSetup) {
             return ROUTES.SETTINGS_2FA_ENABLED;
         }
 

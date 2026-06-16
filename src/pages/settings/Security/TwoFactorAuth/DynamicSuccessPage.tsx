@@ -1,9 +1,11 @@
 import {findFocusedRoute} from '@react-navigation/native';
+import {hasCompletedGuidedSetupFlowSelector} from '@selectors/Onboarding';
 import React from 'react';
 import useDynamicBackPath from '@hooks/useDynamicBackPath';
 import useDynamicForwardPath from '@hooks/useDynamicForwardPath';
 import useEnvironment from '@hooks/useEnvironment';
 import useOnyx from '@hooks/useOnyx';
+import AccountUtils from '@libs/AccountUtils';
 import {getXeroSetupLink} from '@libs/actions/connections/Xero';
 import getStateFromPath from '@libs/Navigation/helpers/getStateFromPath';
 import Navigation from '@libs/Navigation/Navigation';
@@ -14,6 +16,7 @@ import {openReimbursementAccountPage} from '@userActions/BankAccounts';
 import {closeReactNativeApp} from '@userActions/HybridApp';
 import {openLink} from '@userActions/Link';
 import {clearTwoFactorAuthData, quitAndNavigateBack} from '@userActions/TwoFactorAuthActions';
+import {startOnboardingFlow} from '@userActions/Welcome/OnboardingFlow';
 import CONFIG from '@src/CONFIG';
 import ONYXKEYS from '@src/ONYXKEYS';
 import ROUTES, {DYNAMIC_ROUTES} from '@src/ROUTES';
@@ -38,6 +41,14 @@ function DynamicSuccessPage({route}: DynamicSuccessPageProps) {
     const isClassicRedirectBlocked = shouldHideOldAppRedirect(tryNewDot, isLoadingTryNewDot, CONFIG.IS_HYBRID_APP);
     const isClassicRedirectDismissed = tryNewDot?.classicRedirect?.dismissed;
 
+    const [account] = useOnyx(ONYXKEYS.ACCOUNT);
+    const [onboardingValues] = useOnyx(ONYXKEYS.NVP_ONBOARDING);
+    const [hasCompletedGuidedSetupFlow] = useOnyx(ONYXKEYS.NVP_ONBOARDING, {selector: hasCompletedGuidedSetupFlowSelector});
+    const [onboardingPurposeSelected] = useOnyx(ONYXKEYS.ONBOARDING_PURPOSE_SELECTED);
+    const [onboardingCompanySize] = useOnyx(ONYXKEYS.ONBOARDING_COMPANY_SIZE);
+    const [onboardingInitialPath] = useOnyx(ONYXKEYS.ONBOARDING_LAST_VISITED_PATH);
+    const isForced2FAOnboardingSetup = AccountUtils.isForced2FAOnboardingSetup(account, hasCompletedGuidedSetupFlow);
+
     const goBack = () => {
         if (isUSDBankAccountFlow) {
             Navigation.goBack(dynamicBackPath, {
@@ -58,6 +69,27 @@ function DynamicSuccessPage({route}: DynamicSuccessPageProps) {
     const onButtonPress = () => {
         if (CONFIG.IS_HYBRID_APP && isClassicRedirectDismissed && !isClassicRedirectBlocked) {
             closeReactNativeApp({shouldSetNVP: false, isTrackingGPS: false});
+            return;
+        }
+        // Required-2FA onboarding setup: the user finished 2FA while the require-2FA overlay was forcing setup during
+        // onboarding. Clear the in-progress flag synchronously BEFORE the dismiss animation so the overlay doesn't flash
+        // while the modal closes, reveal Home under the RHP, then re-open onboarding so they finish where they left off.
+        // Handled before the isSecuritySettingsFlow branch because the forced base is settings/security too.
+        if (isForced2FAOnboardingSetup) {
+            clearTwoFactorAuthData(true);
+            Navigation.revealRouteBeforeDismissingModal(ROUTES.HOME, {
+                afterTransition: () =>
+                    startOnboardingFlow({
+                        onboardingValuesParam: onboardingValues ?? undefined,
+                        isUserFromPublicDomain: !!account?.isFromPublicDomain,
+                        hasAccessiblePolicies: !!account?.hasAccessibleDomainPolicies,
+                        currentOnboardingCompanySize: onboardingCompanySize,
+                        currentOnboardingPurposeSelected: onboardingPurposeSelected,
+                        onboardingInitialPath,
+                        onboardingValues,
+                        isAccountValidated: !!account?.validated,
+                    }),
+            });
             return;
         }
         // For the Settings > Security entry, keep the 2FA RHP open on the Enabled page instead of dismissing it

@@ -1,4 +1,5 @@
 import {useIsFocused} from '@react-navigation/native';
+import {hasCompletedGuidedSetupFlowSelector} from '@selectors/Onboarding';
 import React, {useEffect, useState} from 'react';
 import {View} from 'react-native';
 import ActivityIndicator from '@components/ActivityIndicator';
@@ -16,6 +17,7 @@ import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
 import useResponsiveLayout from '@hooks/useResponsiveLayout';
 import useThemeStyles from '@hooks/useThemeStyles';
+import AccountUtils from '@libs/AccountUtils';
 import Clipboard from '@libs/Clipboard';
 import getPlatform from '@libs/getPlatform';
 import localFileDownload from '@libs/localFileDownload';
@@ -55,9 +57,14 @@ function DynamicTwoFactorAuthPage() {
     };
 
     const [account, accountMetadata] = useOnyx(ONYXKEYS.ACCOUNT);
+    const [hasCompletedGuidedSetupFlow] = useOnyx(ONYXKEYS.NVP_ONBOARDING, {selector: hasCompletedGuidedSetupFlowSelector});
 
     const isUserValidated = account?.validated ?? false;
-    const is2FAEnabled = !!account?.requiresTwoFactorAuth;
+    // In the forced 2FA onboarding setup state `requiresTwoFactorAuth` is already true while the user still needs to
+    // run the wizard. Treating that as "already enabled" would bounce them to the Enabled page (and keep the overlay up),
+    // so neutralize `is2FAEnabled` for the redirect/early-return below in that case.
+    const isForcedOnboardingSetup = AccountUtils.isForced2FAOnboardingSetup(account, hasCompletedGuidedSetupFlow);
+    const is2FAEnabled = !!account?.requiresTwoFactorAuth && !isForcedOnboardingSetup;
     const accountLoadingReasonAttributes: SkeletonSpanReasonAttributes = {context: 'DynamicTwoFactorAuthPage', isLoading: !!account?.isLoading};
 
     const recoveryCodes = account?.recoveryCodes;

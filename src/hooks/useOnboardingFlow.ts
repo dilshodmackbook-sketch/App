@@ -2,6 +2,8 @@ import {isSingleNewDotEntrySelector} from '@selectors/HybridApp';
 import {hasCompletedGuidedSetupFlowSelector, tryNewDotOnyxSelector, wasInvitedToNewDotSelector} from '@selectors/Onboarding';
 import {emailSelector} from '@selectors/Session';
 import {useEffect} from 'react';
+import AccountUtils from '@libs/AccountUtils';
+import Log from '@libs/Log';
 import getCurrentUrl from '@libs/Navigation/currentUrl';
 import Navigation from '@libs/Navigation/Navigation';
 import TransitionTracker from '@libs/Navigation/TransitionTracker';
@@ -85,6 +87,14 @@ function useOnboardingFlowRouter() {
                     return;
                 }
 
+                // Pause the onboarding auto-redirect while required 2FA setup is active. Otherwise this resetRoot races
+                // the 2FA setup flow — flashing the overlay between wizard steps and bouncing RESET/REPLACE between
+                // onboarding and the dynamic 2FA root. The post-success handoff (DynamicSuccessPage) re-opens onboarding.
+                if (AccountUtils.shouldShowRequire2FAPage(account, isOnboardingCompleted)) {
+                    Log.info('[Require2FA] Pausing onboarding redirect during required 2FA setup');
+                    return;
+                }
+
                 // Explicitly start the onboarding flow when onboarding is not completed.
                 // We use startOnboardingFlow (which calls resetRoot) instead of Navigation.navigate because
                 // navigate goes through the router where OnboardingGuard would block the navigation.
@@ -122,6 +132,7 @@ function useOnboardingFlowRouter() {
         isLoggingInAsNewSessionUser,
         isOnboardingLoading,
         onboardingValues,
+        account,
         account?.isFromPublicDomain,
         account?.hasAccessibleDomainPolicies,
         account?.validated,

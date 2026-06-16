@@ -1,13 +1,14 @@
 import type {NavigationAction, NavigationState} from '@react-navigation/native';
-import {findFocusedRoute} from '@react-navigation/native';
 import {isSingleNewDotEntrySelector} from '@selectors/HybridApp';
 import {hasCompletedGuidedSetupFlowSelector, tryNewDotOnyxSelector, wasInvitedToNewDotSelector} from '@selectors/Onboarding';
 import Onyx from 'react-native-onyx';
 import type {OnyxEntry} from 'react-native-onyx';
 import type {ValueOf} from 'type-fest';
+import AccountUtils from '@libs/AccountUtils';
 import {setOnboardingErrorMessage} from '@libs/actions/Welcome';
 import Log from '@libs/Log';
 import {isOnboardingFlowName} from '@libs/Navigation/helpers/isNavigatorName';
+import {getDeepestFocusedScreen, isTwoFactorSetupScreen} from '@libs/Navigation/Navigation';
 import {getOnboardingInitialPath} from '@userActions/Welcome/OnboardingFlow';
 import CONFIG from '@src/CONFIG';
 import CONST from '@src/CONST';
@@ -114,13 +115,36 @@ function getOnboardingRoute(): Route {
     }) as Route;
 }
 
+/**
+ * Whether the required-2FA setup is currently active, using the same shared predicate as the overlay/hook.
+ */
+function shouldShowRequire2FA(): boolean {
+    const isOnboardingCompleted = hasCompletedGuidedSetupFlowSelector(onboarding) ?? false;
+    return AccountUtils.shouldShowRequire2FAPage(account, isOnboardingCompleted);
+}
+
+/**
+ * Resolve the deepest focused screen from a navigation action payload. Handles both full NavigationState payloads
+ * (RESET) and NAVIGATE `{name, params: {screen}}` payloads. Centralizing the payload cast here keeps it to a single
+ * assertion shared by shouldPreventReset and the evaluate 2FA exception.
+ */
+function getTargetScreenFromAction(action: NavigationAction) {
+    return getDeepestFocusedScreen(action.payload as NavigationState | undefined);
+}
+
 function shouldPreventReset(state: NavigationState, action: NavigationAction) {
     if (action.type !== CONST.NAVIGATION_ACTIONS.RESET || !action?.payload) {
         return false;
     }
 
-    const currentFocusedRoute = findFocusedRoute(state);
-    const targetFocusedRoute = findFocusedRoute(action?.payload as NavigationState);
+    const currentFocusedRoute = getDeepestFocusedScreen(state);
+    const targetFocusedRoute = getTargetScreenFromAction(action);
+
+    // While required 2FA setup is active, allow RESET into a 2FA setup screen. The required-2FA overlay floats over
+    // onboarding and its CTA resets into the 2FA setup flow; blocking it would trap the user behind the overlay.
+    if (shouldShowRequire2FA() && isTwoFactorSetupScreen(targetFocusedRoute?.name)) {
+        return false;
+    }
 
     // We want to prevent the user from navigating back to a non-onboarding screen if they are currently on an onboarding screen
     if (isOnboardingFlowName(currentFocusedRoute?.name) && !isOnboardingFlowName(targetFocusedRoute?.name)) {
@@ -163,6 +187,24 @@ const OnboardingGuard: NavigationGuard = {
     evaluate: (state, action, context): GuardResult => {
         if (shouldPreventReset(state, action)) {
             return {type: 'BLOCK', reason: 'Cannot reset to non-onboarding screen while on onboarding'};
+        }
+
+        // Required-2FA exception: while required 2FA setup is active, allow navigation that targets a 2FA setup screen
+        // (the "Enable two-factor authentication" CTA) and allow in-wizard steps while already on a 2FA setup screen
+        // (forceReplace between steps). Without this, the guard would redirect the 2FA navigation back to onboarding and
+        // the user would stay trapped behind the require-2FA overlay.
+        // getDeepestFocusedScreen (not findFocusedRoute) resolves the target from both full NavigationState payloads and
+        // NAVIGATE `{name, params: {screen}}` payloads.
+        if (shouldShowRequire2FA()) {
+            const targetScreen = getTargetScreenFromAction(action);
+            const currentScreen = getDeepestFocusedScreen(state);
+            if (isTwoFactorSetupScreen(targetScreen?.name) || isTwoFactorSetupScreen(currentScreen?.name)) {
+                Log.info('[OnboardingGuard] Allowing 2FA setup navigation during required 2FA', false, {
+                    targetScreen: targetScreen?.name,
+                    currentScreen: currentScreen?.name,
+                });
+                return {type: 'ALLOW'};
+            }
         }
 
         const isTransitioning = context.currentUrl?.includes(ROUTES.TRANSITION_BETWEEN_APPS);

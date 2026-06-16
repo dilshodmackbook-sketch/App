@@ -13,10 +13,12 @@ import useRootNavigationState from '@hooks/useRootNavigationState';
 import useShouldShowRequire2FAPage from '@hooks/useShouldShowRequire2FAPage';
 import useThemeStyles from '@hooks/useThemeStyles';
 import useTwoFactorAuthRoute from '@hooks/useTwoFactorAuthRoute';
+import Log from '@libs/Log';
 import Navigation, {getDeepestFocusedScreen, isTwoFactorSetupScreen} from '@libs/Navigation/Navigation';
 import variables from '@styles/variables';
 import CONST from '@src/CONST';
 import ONYXKEYS from '@src/ONYXKEYS';
+import ROUTES from '@src/ROUTES';
 import {emailSelector} from '@src/selectors/Session';
 import type {Policy} from '@src/types/onyx';
 
@@ -53,7 +55,13 @@ function RequireTwoFactorAuthenticationOverlay() {
     const [is2FARequiredBecauseOfXero = false] = useOnyx(ONYXKEYS.COLLECTION.POLICY, {selector: requires2FAForXeroSelector});
 
     const handleOnPress = () => {
-        Navigation.navigate(getTwoFactorAuthRoute());
+        // Anchor the dynamic 2FA route to a stable, always-resolvable base (settings/security) instead of the
+        // transient screen sitting behind the absolute-fill overlay (e.g. onboarding), and force the setup flow so the
+        // focused screen becomes a SET_UP_2FA_SCREENS member even when `requiresTwoFactorAuth` is already true.
+        // That is what lets `isIn2FASetupFlow` flip true and the overlay dismiss itself.
+        const targetRoute = getTwoFactorAuthRoute(ROUTES.SETTINGS_SECURITY, {forceSetup: true});
+        Log.info('[Require2FA] Enable 2FA pressed', false, {targetRoute});
+        Navigation.navigate(targetRoute);
     };
 
     if (!shouldShowRequire2FAPage || isIn2FASetupFlow) {
