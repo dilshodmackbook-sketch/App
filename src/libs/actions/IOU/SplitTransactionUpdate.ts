@@ -733,14 +733,18 @@ function updateSplitTransactions({
 
             if (isReverseSplitOperation) {
                 delete transactionChanges.transactionID;
+                // Always restore the original transaction optimistically on a revert (not just for selfDM),
+                // so moneyRequestInformationOnyxData is applied even when transactionChanges is empty (pure
+                // revert). Without this, a workspace revert deletes both child transactions but never re-adds
+                // the original, leaving the expense report at "non-zero total with zero active transactions" —
+                // the state that drives the cross-platform "Not Found" flash and the iOS stuck-loading skeleton.
+                hasChanges = true;
                 if (isSelfDMSplit) {
                     // For revert selfDM splits, ALL field changes are already captured in
                     // requestMoneyInformation.transactionParams (amount, date, merchant, category, etc.).
                     for (const key of Object.keys(transactionChanges)) {
                         delete transactionChanges[key as keyof typeof transactionChanges];
                     }
-                    // Ensure moneyRequestInformationOnyxData is applied even though transactionChanges is now empty.
-                    hasChanges = true;
                 }
             }
 
