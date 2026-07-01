@@ -17,7 +17,7 @@ import useThemeStyles from '@hooks/useThemeStyles';
 import useUpdateFeedBrokenConnection from '@hooks/useUpdateFeedBrokenConnection';
 import {updateSelectedFeed} from '@libs/actions/Card';
 import {setAssignCardStepAndData} from '@libs/actions/CompanyCards';
-import {checkIfNewFeedConnected, getBankName, getCompanyCardFeed, isSelectedFeedExpired} from '@libs/CardUtils';
+import {checkIfNewFeedConnected, getBankName, getCompanyCardFeed, getDomainOrWorkspaceAccountID, getFeedDomainName, isSelectedFeedExpired} from '@libs/CardUtils';
 import getUAForWebView from '@libs/getUAForWebView';
 import Navigation from '@libs/Navigation/Navigation';
 import type {SkeletonSpanReasonAttributes} from '@libs/telemetry/useSkeletonSpan';
@@ -52,8 +52,14 @@ function BankConnection({policyID, feed, title}: BankConnectionProps) {
     const bankName = feed ? getBankName(getCompanyCardFeed(feed)) : (addNewCard?.data?.plaidConnectedFeed ?? selectedBank);
     const plaidToken = addNewCard?.data?.publicToken ?? assignCard?.cardToAssign?.plaidAccessToken;
     const isPlaid = !!plaidToken;
-    const url = getCompanyCardBankConnection(policyID, bankName);
-    const [cardFeeds] = useCardFeeds(policyID);
+    const [cardFeeds, , , , workspaceAccountID] = useCardFeeds(policyID);
+    // Reauthorization must be scoped to the domain that owns the feed, not the current workspace. A feed shared from
+    // another workspace/domain is owned by a different domain, so we read the owning domainName the backend stamps on
+    // the feed's cards and pass it through; single-workspace feeds resolve to undefined and keep the policy domain.
+    const domainOrWorkspaceAccountID = feed ? getDomainOrWorkspaceAccountID(workspaceAccountID, cardFeeds?.[feed]) : undefined;
+    const [feedCardsList] = useOnyx(`${ONYXKEYS.COLLECTION.WORKSPACE_CARDS_LIST}${domainOrWorkspaceAccountID}_${bankName}`);
+    const feedDomainName = feed ? getFeedDomainName(feedCardsList) : undefined;
+    const url = getCompanyCardBankConnection(policyID, bankName, feedDomainName);
     const [isConnectionCompleted, setConnectionCompleted] = useState(false);
     const prevFeedsData = usePrevious(cardFeeds);
     const isFeedExpired = feed ? isSelectedFeedExpired(cardFeeds?.[feed]) : false;
@@ -63,7 +69,7 @@ function BankConnection({policyID, feed, title}: BankConnectionProps) {
     );
     const headerTitleAddCards = translate('workspace.companyCards.addCards');
     const headerTitle = feed ? translate('workspace.companyCards.assignCard') : headerTitleAddCards;
-    const onImportPlaidAccounts = useImportPlaidAccounts(policyID);
+    const onImportPlaidAccounts = useImportPlaidAccounts(policyID, feedDomainName);
     const {updateBrokenConnection, isFeedConnectionBroken} = useUpdateFeedBrokenConnection({policyID, feed});
     const isNewFeedHasError = !!(newFeed && cardFeeds?.[newFeed]?.errors);
     const {isBlockedToAddNewFeeds, isAllFeedsResultLoading} = useIsBlockedToAddFeed(policyID);

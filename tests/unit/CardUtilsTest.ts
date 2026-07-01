@@ -46,6 +46,7 @@ import {
     getEligibleBankAccountsForCard,
     getEligibleBankAccountsForUkEuCard,
     getFeedConnectionBrokenCard,
+    getFeedDomainName,
     getFeedNameForDisplay,
     getFeedType,
     getFilteredCardList,
@@ -4657,5 +4658,46 @@ describe('getCompanyCardCustomName', () => {
 
     it('returns undefined when neither NVP has a name for the card', () => {
         expect(getCompanyCardCustomName('9999', sharedCardCustomNames, customCardNames)).toBeUndefined();
+    });
+});
+
+describe('getFeedDomainName', () => {
+    it('returns undefined when the cards list is undefined', () => {
+        expect(getFeedDomainName(undefined)).toBeUndefined();
+    });
+
+    it('returns undefined when the cards list has no cards', () => {
+        const cardsList: WorkspaceCardsList = {};
+        expect(getFeedDomainName(cardsList)).toBeUndefined();
+    });
+
+    it('returns the workspace synthetic domain for a single-workspace feed', () => {
+        // A plain single-workspace feed resolves to the same synthetic domain getDomainNameForPolicy would build.
+        expect(getFeedDomainName(directFeedCardsSingleList)).toBe('expensify-policy17f617b9fe23d2f1.exfy');
+    });
+
+    it('returns the feed owner domain stamped on the cards for a shared/domain-level feed', () => {
+        const sharedFeedCardsList: WorkspaceCardsList = {
+            '31570652': {
+                accountID: 18439984,
+                bank: CONST.COMPANY_CARD.FEED_BANK_NAME.CHASE,
+                cardID: 31570652,
+                cardName: 'CREDIT CARD...9901',
+                domainName: 'company.com',
+                fraud: 'none',
+                lastFourPAN: '9901',
+                lastScrape: '',
+                lastUpdated: '',
+                lastScrapeResult: 403,
+                scrapeMinDate: '2024-08-27',
+                state: 3,
+            },
+        };
+        expect(getFeedDomainName(sharedFeedCardsList)).toBe('company.com');
+    });
+
+    it('ignores the cardList metadata entry and reads the domain from a real card', () => {
+        // customFeedCardsList carries the `cardList` metadata alongside real cards.
+        expect(getFeedDomainName(customFeedCardsList)).toBe('expensify-policy41314f4dc5ce25af.exfy');
     });
 });

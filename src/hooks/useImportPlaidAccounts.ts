@@ -4,7 +4,7 @@ import {importPlaidAccounts} from '@userActions/Plaid';
 import ONYXKEYS from '@src/ONYXKEYS';
 import useOnyx from './useOnyx';
 
-export default function useImportPlaidAccounts(policyID?: string) {
+export default function useImportPlaidAccounts(policyID?: string, domainName?: string) {
     const [assignCard] = useOnyx(ONYXKEYS.ASSIGN_CARD);
     const [addNewCard] = useOnyx(ONYXKEYS.ADD_NEW_COMPANY_CARD);
 
@@ -18,6 +18,7 @@ export default function useImportPlaidAccounts(policyID?: string) {
         if (!policyID || !plaidToken || !plaidFeed || !plaidFeedName || !country || !plaidAccounts?.length) {
             return;
         }
-        importPlaidAccounts(plaidToken, plaidFeed, plaidFeedName, country, getDomainNameForPolicy(policyID), JSON.stringify(plaidAccounts), '');
-    }, [country, plaidAccounts, plaidFeed, plaidFeedName, plaidToken, policyID]);
+        // Scope the Plaid reconnect to the feed's owning domain when reauthorizing a shared feed; fall back to the policy domain.
+        importPlaidAccounts(plaidToken, plaidFeed, plaidFeedName, country, domainName ?? getDomainNameForPolicy(policyID), JSON.stringify(plaidAccounts), '');
+    }, [country, plaidAccounts, plaidFeed, plaidFeedName, plaidToken, policyID, domainName]);
 }

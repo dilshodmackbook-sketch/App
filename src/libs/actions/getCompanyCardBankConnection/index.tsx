@@ -17,7 +17,7 @@ type PersonalCardBankConnection = {
     scrapeMinDate: string;
 };
 
-function getCompanyCardBankConnection(policyID?: string, bankName?: string | null) {
+function getCompanyCardBankConnection(policyID?: string, bankName?: string | null, domainName?: string) {
     const bankConnection = Object.keys(CONST.COMPANY_CARDS.BANKS).find((key) => CONST.COMPANY_CARDS.BANKS[key as keyof typeof CONST.COMPANY_CARDS.BANKS] === bankName);
 
     if (!bankName || !bankConnection || !policyID) {
@@ -27,7 +27,9 @@ function getCompanyCardBankConnection(policyID?: string, bankName?: string | nul
     const params: CompanyCardBankConnection = {
         authToken: authToken ?? '',
         isNewDot: 'true',
-        domainName: PolicyUtils.getDomainNameForPolicy(policyID),
+        // Reauthorization must target the feed's owning domain. Shared feeds are owned by a different domain, so
+        // fall back to the current policy's synthetic domain only when no feed domain is provided.
+        domainName: domainName ?? PolicyUtils.getDomainNameForPolicy(policyID),
         isCorporate: 'true',
         scrapeMinDate: '',
     };

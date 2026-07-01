@@ -875,6 +875,21 @@ function getDomainOrWorkspaceAccountID(workspaceAccountID: number, cardFeedData:
     return cardFeedData?.domainID ?? workspaceAccountID;
 }
 
+/**
+ * Returns the owning `domainName` stamped by the backend on the cards of a feed.
+ *
+ * For a feed shared from another workspace/domain this is the feed's real owning domain, which differs from the
+ * current workspace's synthetic `expensify-policy<policyID>.exfy` domain. Used to scope the reauthorization OAuth
+ * callback to the domain that actually owns the connection instead of whichever workspace the user is currently on.
+ *
+ * Returns `undefined` when no card carries a `domainName`, so callers fall back to `getDomainNameForPolicy(policyID)`
+ * and single-workspace feeds keep their existing behavior.
+ */
+function getFeedDomainName(cardsList: OnyxEntry<WorkspaceCardsList>): string | undefined {
+    const {cardList, ...cards} = cardsList ?? {};
+    return Object.values(cards).find((card: Card) => !!card?.domainName)?.domainName;
+}
+
 function getPlaidCountry(outputCurrency?: string, currencyList?: CurrencyList, countryByIp?: string) {
     const selectedCurrency = outputCurrency ? currencyList?.[outputCurrency] : null;
     const countries = selectedCurrency?.countries;
@@ -1960,6 +1975,7 @@ export {
     getCardAssignmentDateOption,
     getCardAssignmentStartDate,
     getDomainOrWorkspaceAccountID,
+    getFeedDomainName,
     mergeCardListWithWorkspaceFeeds,
     isCard,
     filterCardsByNonExpensify,
