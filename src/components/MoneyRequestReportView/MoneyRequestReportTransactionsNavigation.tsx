@@ -1,5 +1,5 @@
 import {findFocusedRoute} from '@react-navigation/native';
-import React, {useCallback, useEffect, useMemo} from 'react';
+import React, {startTransition, useCallback, useEffect, useMemo} from 'react';
 import type {GestureResponderEvent} from 'react-native';
 import type {OnyxCollection, OnyxEntry} from 'react-native-onyx';
 import PrevNextButtons from '@components/PrevNextButtons';
@@ -135,36 +135,48 @@ function MoneyRequestReportTransactionsNavigation({currentTransactionID, isFromR
         const nextDescriptor = nextTransactionID ? siblingDescriptorsByTransactionID?.[nextTransactionID] : undefined;
         if (nextDescriptor) {
             const nextReportID = getReportIDToOpenForExpense(nextDescriptor, {introSelected, betas, currentUserEmail, currentUserAccountID});
-            markReportIDAsExpense(nextReportID);
-            requestAnimationFrame(() => Navigation.setParams({reportID: nextReportID, reportActionID: undefined, backTo}));
+            // Defer off the press frame (see the main path below), then commit the destination as a non-urgent transition.
+            requestAnimationFrame(() => {
+                markReportIDAsExpense(nextReportID);
+                requestAnimationFrame(() => startTransition(() => Navigation.setParams({reportID: nextReportID, reportActionID: undefined, backTo})));
+            });
             return;
         }
 
         const nextThreadReportID = nextParentReportAction?.childReportID;
-        const navigationParams = {reportID: nextThreadReportID, reportActionID: undefined, backTo};
 
-        if (nextThreadReportID) {
-            markReportIDAsExpense(nextThreadReportID);
-        }
-        // We know that the next thread report exists, it just wasn't fetched to Onyx yet, so we set it optimistically.
-        if (!nextThreadReport && nextThreadReportID) {
-            setOptimisticTransactionThread(nextThreadReportID, nextParentReport?.reportID, nextParentReportAction?.reportActionID, nextParentReport?.policyID);
-        }
-        // The transaction thread doesn't exist yet, so we should create it
-        if (!nextThreadReportID) {
-            const transactionThreadReport = createTransactionThreadReport({
-                introSelected,
-                currentUserLogin: currentUserEmail ?? '',
-                currentUserAccountID,
-                betas,
-                iouReport: nextParentReport,
-                iouReportAction: nextParentReportAction,
-                transaction: nextTransaction,
-            });
-            navigationParams.reportID = transactionThreadReport?.reportID;
-        }
-        // Wait for the next frame to ensure Onyx has processed the optimistic data updates from setOptimisticTransactionThread or createTransactionThreadReport before navigating
-        requestAnimationFrame(() => Navigation.setParams(navigationParams));
+        // Defer the optimistic-thread prep off the press frame so the button can paint its pressed
+        // feedback immediately instead of waiting on createTransactionThreadReport/openReport, then
+        // mark the destination render as a non-urgent transition so React paints first and commits
+        // the heavy destination tree off the critical path. The inner frame preserves the documented
+        // Onyx-flush gap the original comment below depends on.
+        requestAnimationFrame(() => {
+            const navigationParams = {reportID: nextThreadReportID, reportActionID: undefined, backTo};
+
+            if (nextThreadReportID) {
+                markReportIDAsExpense(nextThreadReportID);
+            }
+            // We know that the next thread report exists, it just wasn't fetched to Onyx yet, so we set it optimistically.
+            if (!nextThreadReport && nextThreadReportID) {
+                setOptimisticTransactionThread(nextThreadReportID, nextParentReport?.reportID, nextParentReportAction?.reportActionID, nextParentReport?.policyID);
+            }
+            // The transaction thread doesn't exist yet, so we should create it
+            if (!nextThreadReportID) {
+                const transactionThreadReport = createTransactionThreadReport({
+                    introSelected,
+                    currentUserLogin: currentUserEmail ?? '',
+                    currentUserAccountID,
+                    betas,
+                    iouReport: nextParentReport,
+                    iouReportAction: nextParentReportAction,
+                    transaction: nextTransaction,
+                });
+                navigationParams.reportID = transactionThreadReport?.reportID;
+            }
+            // Wait for the next frame to ensure Onyx has processed the optimistic data updates from setOptimisticTransactionThread or createTransactionThreadReport before navigating,
+            // then mark the destination render as a non-urgent transition so React paints first and commits the heavy destination tree off the interaction's paint.
+            requestAnimationFrame(() => startTransition(() => Navigation.setParams(navigationParams)));
+        });
     };
 
     const onPrevious = (e: GestureResponderEvent | KeyboardEvent | undefined) => {
@@ -181,36 +193,44 @@ function MoneyRequestReportTransactionsNavigation({currentTransactionID, isFromR
         const prevDescriptor = prevTransactionID ? siblingDescriptorsByTransactionID?.[prevTransactionID] : undefined;
         if (prevDescriptor) {
             const prevReportID = getReportIDToOpenForExpense(prevDescriptor, {introSelected, betas, currentUserEmail, currentUserAccountID});
-            markReportIDAsExpense(prevReportID);
-            requestAnimationFrame(() => Navigation.setParams({reportID: prevReportID, reportActionID: undefined, backTo}));
+            // Defer off the press frame (see onNext), then commit the destination as a non-urgent transition.
+            requestAnimationFrame(() => {
+                markReportIDAsExpense(prevReportID);
+                requestAnimationFrame(() => startTransition(() => Navigation.setParams({reportID: prevReportID, reportActionID: undefined, backTo})));
+            });
             return;
         }
 
         const prevThreadReportID = prevParentReportAction?.childReportID;
-        const navigationParams = {reportID: prevThreadReportID, reportActionID: undefined, backTo};
 
-        if (prevThreadReportID) {
-            markReportIDAsExpense(prevThreadReportID);
-        }
-        // We know that the previous thread report exists, it just wasn't fetched to Onyx yet, so we set it optimistically.
-        if (!prevThreadReport && prevThreadReportID) {
-            setOptimisticTransactionThread(prevThreadReportID, prevParentReport?.reportID, prevParentReportAction?.reportActionID, prevParentReport?.policyID);
-        }
-        // The transaction thread doesn't exist yet, so we should create it
-        if (!prevThreadReportID) {
-            const transactionThreadReport = createTransactionThreadReport({
-                introSelected,
-                currentUserLogin: currentUserEmail ?? '',
-                currentUserAccountID,
-                betas,
-                iouReport: prevParentReport,
-                iouReportAction: prevParentReportAction,
-                transaction: prevTransaction,
-            });
-            navigationParams.reportID = transactionThreadReport?.reportID;
-        }
-        // Wait for the next frame to ensure Onyx has processed the optimistic data updates from setOptimisticTransactionThread or createTransactionThreadReport before navigating
-        requestAnimationFrame(() => Navigation.setParams(navigationParams));
+        // See onNext: defer the optimistic-thread prep off the press frame, keep the one-frame Onyx-flush gap, and commit the destination as a non-urgent transition.
+        requestAnimationFrame(() => {
+            const navigationParams = {reportID: prevThreadReportID, reportActionID: undefined, backTo};
+
+            if (prevThreadReportID) {
+                markReportIDAsExpense(prevThreadReportID);
+            }
+            // We know that the previous thread report exists, it just wasn't fetched to Onyx yet, so we set it optimistically.
+            if (!prevThreadReport && prevThreadReportID) {
+                setOptimisticTransactionThread(prevThreadReportID, prevParentReport?.reportID, prevParentReportAction?.reportActionID, prevParentReport?.policyID);
+            }
+            // The transaction thread doesn't exist yet, so we should create it
+            if (!prevThreadReportID) {
+                const transactionThreadReport = createTransactionThreadReport({
+                    introSelected,
+                    currentUserLogin: currentUserEmail ?? '',
+                    currentUserAccountID,
+                    betas,
+                    iouReport: prevParentReport,
+                    iouReportAction: prevParentReportAction,
+                    transaction: prevTransaction,
+                });
+                navigationParams.reportID = transactionThreadReport?.reportID;
+            }
+            // Wait for the next frame to ensure Onyx has processed the optimistic data updates from setOptimisticTransactionThread or createTransactionThreadReport before navigating,
+            // then mark the destination render as a non-urgent transition so React paints first and commits the heavy destination tree off the interaction's paint.
+            requestAnimationFrame(() => startTransition(() => Navigation.setParams(navigationParams)));
+        });
     };
 
     return (
