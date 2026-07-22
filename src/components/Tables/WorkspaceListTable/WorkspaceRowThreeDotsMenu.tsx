@@ -25,7 +25,7 @@ import {createOwnedPaidPoliciesCountsSelector} from '@src/selectors/Policy';
 import type {ValueOf} from 'type-fest';
 
 import {useIsFocused} from '@react-navigation/core';
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useRef, useState} from 'react';
 
 import type {WorkspaceRowData} from '.';
 
@@ -74,17 +74,6 @@ function WorkspaceRowThreeDotsMenu({item, onDeleteWorkspace, pendingDeletePolicy
     const wouldBlockDeletion = (amountOwed ?? 0) > 0 && ownedPaidPoliciesCounts?.active === 1;
 
     const [activeAction, setActiveAction] = useState<ActiveAction>();
-
-    useEffect(() => {
-        if (isLoadingBill) {
-            return;
-        }
-
-        if (!threeDotsMenuRef.current?.isPopupMenuVisible) {
-            return;
-        }
-        threeDotsMenuRef?.current?.hidePopoverMenu();
-    }, [isLoadingBill]);
 
     const isDefault = activePolicyID === item.policyID;
     const isOwner = item.ownerAccountID === currentUserPersonalDetails.accountID;

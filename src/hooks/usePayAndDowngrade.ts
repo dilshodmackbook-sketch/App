@@ -33,9 +33,10 @@ function usePayAndDowngrade(continueAction: () => void) {
         }
 
         if (!shouldBillWhenDowngrading) {
+            // Popover is closed via closeTop, and continueAction runs once onModalDidClose fires — a single close path.
             close(continueActionRef.current);
         } else {
-            Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.WORKSPACE_PAY_AND_DOWNGRADE.path));
+            close(() => Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.WORKSPACE_PAY_AND_DOWNGRADE.path)));
         }
 
         isDeletingPaidWorkspaceRef.current = false;
