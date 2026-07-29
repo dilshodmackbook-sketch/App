@@ -84,6 +84,8 @@ describe('useDiscardChangesConfirmation (native)', () => {
         });
     };
 
+    let rafSpy: jest.SpyInstance;
+
     beforeEach(() => {
         jest.clearAllMocks();
         mockPreventRemoveFlag = undefined;
@@ -91,6 +93,12 @@ describe('useDiscardChangesConfirmation (native)', () => {
         mockIsFocused = true;
         hardwareBackCallback = undefined;
         resolveModal = undefined;
+        // The confirm replay is deferred through `setNavigationActionToMicrotaskQueue`, which uses requestAnimationFrame.
+        // Run the frame callback synchronously so the flushed microtasks in `resolveModalWith` observe the replay.
+        rafSpy = jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+            callback(0);
+            return 0;
+        });
         backHandlerSpy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((event, handler) => {
             hardwareBackCallback = handler;
             return {remove: removeSubscription};
@@ -105,6 +113,7 @@ describe('useDiscardChangesConfirmation (native)', () => {
 
     afterEach(() => {
         backHandlerSpy.mockRestore();
+        rafSpy.mockRestore();
     });
 
     describe('hardware back (tab-switch case: no removal, usePreventRemove blind)', () => {
@@ -220,6 +229,34 @@ describe('useDiscardChangesConfirmation (native)', () => {
 
             expect(mockNavigationDispatch).toHaveBeenCalledWith({type: 'POP'});
             expect(mockNavigationGoBack).not.toHaveBeenCalled();
+        });
+
+        it('defers the blocked-action replay to a frame instead of dispatching it synchronously on confirm', async () => {
+            // Capture the frame callback instead of running it, so we can assert the replay is deferred, not synchronous.
+            let deferredFrame: FrameRequestCallback | undefined;
+            rafSpy.mockImplementation((callback: FrameRequestCallback) => {
+                deferredFrame = callback;
+                return 0;
+            });
+
+            renderDiscardHook(() => true);
+
+            invokeBeforeRemove('POP');
+
+            // Resolving the modal must not replay the back on the same tick — that races the RHP teardown and keyboard
+            // blur, leaving stale focus/nav state that swallows the next tap (issue #97127).
+            await act(async () => {
+                resolveModal?.({action: 'CONFIRM'});
+                await Promise.resolve();
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+            expect(mockNavigationDispatch).not.toHaveBeenCalled();
+
+            // Once the deferred frame runs, the blocked action is replayed exactly once.
+            act(() => deferredFrame?.(0));
+            expect(mockNavigationDispatch).toHaveBeenCalledTimes(1);
+            expect(mockNavigationDispatch).toHaveBeenCalledWith({type: 'POP'});
         });
 
         it('allows and replays the action immediately when the form is clean', () => {

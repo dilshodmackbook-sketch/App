@@ -3,6 +3,7 @@ import {ModalActions} from '@components/Modal/Global/ModalContext';
 import useConfirmModal from '@hooks/useConfirmModal';
 import useLocalize from '@hooks/useLocalize';
 
+import setNavigationActionToMicrotaskQueue from '@libs/Navigation/helpers/setNavigationActionToMicrotaskQueue';
 import navigationRef from '@libs/Navigation/navigationRef';
 import {useRegisterTabSwitchGuard} from '@libs/Navigation/TabSwitchGuardContext';
 
@@ -64,9 +65,17 @@ function useDiscardChangesConfirmation({
                 }
                 isReplayingBlockedNavigation.current = false;
             };
-            runDiscardConfirmation(onConfirm, confirmNavigation, () => {
-                blockedNavigationAction.current = undefined;
-            });
+            // Defer the replayed back to a microtask/frame — same as the web hook — so the closing RHP's teardown and
+            // keyboard blur settle before the blocked navigation is applied. Replaying it synchronously leaves stale
+            // focus/nav state behind that swallows the next tap on the row (the composer "jumps up" and the edit RHP
+            // never opens). See https://github.com/Expensify/App/issues/97127.
+            runDiscardConfirmation(
+                onConfirm,
+                () => setNavigationActionToMicrotaskQueue(confirmNavigation),
+                () => {
+                    blockedNavigationAction.current = undefined;
+                },
+            );
         });
     };
 
