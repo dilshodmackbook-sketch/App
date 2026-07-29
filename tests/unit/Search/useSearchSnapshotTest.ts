@@ -351,22 +351,72 @@ describe('useSearchSnapshot', () => {
         expect(result.current.hasCachedOptimisticItem).toBe(true);
     });
 
-    it('stamps the post-create highlight on matching rows (newSearchResultKeys)', () => {
-        const searchResults = makeSearchResults();
-        mockUseOptimisticSearchTracking.mockReturnValue(trackingReturn(searchResults.data));
-        mockGetSortedSections.mockReturnValue([{transactionID: '7', keyForList: '7'}]);
+    it('stamps the post-create highlight on the render where the key first appears', () => {
+        // Realistic lifecycle: the snapshot mounts first (no highlight keys yet), then useSearchHighlightAndScroll
+        // detects the new item and feeds its key in. The row animates on the render where the key first appears.
+        const highlightKey = `${ONYXKEYS.COLLECTION.TRANSACTION}7`;
+        mockUseOptimisticSearchTracking.mockImplementation((searchData: unknown) => trackingReturn(searchData));
+        mockGetSortedSections.mockImplementation(() => [{transactionID: '7', keyForList: '7'}]);
 
-        const {result} = renderHook(() =>
-            useSearchSnapshot({
-                queryJSON: makeQueryJSON(),
-                searchResults,
-                newSearchResultKeys: new Set([`${ONYXKEYS.COLLECTION.TRANSACTION}7`]),
-                transactions: undefined,
-                reportActions: undefined,
-            }),
-        );
+        const initialProps: Parameters<typeof useSearchSnapshot>[0] = {
+            queryJSON: makeQueryJSON(),
+            searchResults: makeSearchResults(),
+            newSearchResultKeys: undefined,
+            transactions: undefined,
+            reportActions: undefined,
+        };
+        const {result, rerender} = renderHook((props: Parameters<typeof useSearchSnapshot>[0]) => useSearchSnapshot(props), {initialProps});
+
+        rerender({
+            queryJSON: makeQueryJSON(),
+            searchResults: makeSearchResults(),
+            newSearchResultKeys: new Set([highlightKey]),
+            transactions: undefined,
+            reportActions: undefined,
+        });
 
         expect(result.current.chartData.at(0)).toEqual(expect.objectContaining({shouldAnimateInHighlight: true}));
+    });
+
+    it('stamps a highlight key only once so a snapshot recompute cannot replay the fade', () => {
+        // Repro of the first-row flicker: `newSearchResultKeys` stays populated for the whole highlight
+        // window, so when the projection recomputes during that window (a react-freeze thaw + focus refetch
+        // rebuilds the rows) it must NOT re-arm `shouldAnimateInHighlight` on a row that already animated.
+        const highlightKey = `${ONYXKEYS.COLLECTION.TRANSACTION}7`;
+        mockUseOptimisticSearchTracking.mockImplementation((searchData: unknown) => trackingReturn(searchData));
+        // Fresh row object each call mirrors getSortedSections rebuilding rows on every recompute.
+        mockGetSortedSections.mockImplementation(() => [{transactionID: '7', keyForList: '7'}]);
+
+        const initialProps: Parameters<typeof useSearchSnapshot>[0] = {
+            queryJSON: makeQueryJSON(),
+            searchResults: makeSearchResults(),
+            newSearchResultKeys: undefined,
+            transactions: undefined,
+            reportActions: undefined,
+        };
+        const {result, rerender} = renderHook((props: Parameters<typeof useSearchSnapshot>[0]) => useSearchSnapshot(props), {initialProps});
+
+        // The highlight key first appears → the newest row animates once.
+        rerender({
+            queryJSON: makeQueryJSON(),
+            searchResults: makeSearchResults(),
+            newSearchResultKeys: new Set([highlightKey]),
+            transactions: undefined,
+            reportActions: undefined,
+        });
+        expect(result.current.chartData.at(0)).toEqual(expect.objectContaining({shouldAnimateInHighlight: true}));
+
+        // Projection recomputes while the key is still inside the highlight window (fresh key-set reference
+        // models the refetch rebuild). The key was already present last render → the row no longer animates.
+        rerender({
+            queryJSON: makeQueryJSON(),
+            searchResults: makeSearchResults(),
+            newSearchResultKeys: new Set([highlightKey]),
+            transactions: undefined,
+            reportActions: undefined,
+        });
+
+        expect(result.current.chartData.at(0)).toEqual(expect.objectContaining({shouldAnimateInHighlight: false}));
     });
 
     it('passes the query type through to getSortedSections for each variant shape', () => {

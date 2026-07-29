@@ -10,6 +10,7 @@ import useMultipleSnapshots from '@hooks/useMultipleSnapshots';
 import useNetwork from '@hooks/useNetwork';
 import useOnyx from '@hooks/useOnyx';
 import usePolicyForMovingExpenses from '@hooks/usePolicyForMovingExpenses';
+import usePrevious from '@hooks/usePrevious';
 import useReportAttributes from '@hooks/useReportAttributes';
 
 import {selectFilteredReportActions} from '@libs/ReportUtils';
@@ -304,6 +305,15 @@ function useSearchSnapshot({queryJSON, searchResults, newSearchResultKeys, trans
         convertToDisplayString,
     ]);
 
+    // Highlight keys from the previous render. `newSearchResultKeys` stays populated for the whole
+    // ANIMATED_HIGHLIGHT_START_DURATION window, so a row must only animate on the render where its key
+    // *first enters* that set — otherwise any snapshot recompute during the window re-stamps
+    // `shouldAnimateInHighlight` and replays the enter-fade. On desktop web the Search subtree is suspended
+    // by react-freeze on `Inbox` and thawed on return, and the focus refetch rebuilds `filteredData` into
+    // brand-new row objects — remounting the newest row with the highlight still armed, which is the
+    // first-row flicker. Gating on "key not present last render" makes each highlight play exactly once.
+    const previousNewSearchResultKeys = usePrevious(newSearchResultKeys);
+
     // Stage 3: sort the (enriched) data, then stamp the post-create highlight on each row. getSortedSections
     // accepts the full section union; our SearchListItem[] is a compatible subset of that input.
     const chartData = useMemo<SearchListItem[]>(() => {
@@ -322,18 +332,28 @@ function useSearchSnapshot({queryJSON, searchResults, newSearchResultKeys, trans
             const transactionID = (item as TransactionListItemType).transactionID;
             const baseKey = isChat ? `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportActionID}` : `${ONYXKEYS.COLLECTION.TRANSACTION}${transactionID}`;
 
-            const isBaseKeyMatch = !!newSearchResultKeys?.has(baseKey);
-
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- group rows expose nested transactions
-            const groupTransactionsForHighlight = (item as TransactionGroupListItemType)?.transactions;
-            const isAnyTransactionMatch =
-                !isChat &&
-                groupTransactionsForHighlight?.some((transaction) => {
+            // Collect every highlight key that matches this row (its base key plus, for grouped rows, any
+            // nested transaction key), so the stamp-once latch below can key off the exact matched keys.
+            const matchedHighlightKeys: string[] = [];
+            if (newSearchResultKeys?.has(baseKey)) {
+                matchedHighlightKeys.push(baseKey);
+            }
+            if (!isChat) {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- group rows expose nested transactions
+                const groupTransactionsForHighlight = (item as TransactionGroupListItemType)?.transactions;
+                for (const transaction of groupTransactionsForHighlight ?? []) {
                     const transactionKey = `${ONYXKEYS.COLLECTION.TRANSACTION}${transaction.transactionID}`;
-                    return !!newSearchResultKeys?.has(transactionKey);
-                });
+                    if (newSearchResultKeys?.has(transactionKey)) {
+                        matchedHighlightKeys.push(transactionKey);
+                    }
+                }
+            }
 
-            const shouldAnimateInHighlight = isBaseKeyMatch || isAnyTransactionMatch;
+            // Stamp-once gate: a row animates only when one of its matched keys is newly present this
+            // render (was not in the previous render's key set). A recompute/remount later in the same
+            // highlight window sees the key already present last render, resolves to `false`, and never
+            // replays the fade — while a genuinely new item (a key absent last render) still highlights.
+            const shouldAnimateInHighlight = matchedHighlightKeys.some((key) => !previousNewSearchResultKeys?.has(key));
 
             if (item.shouldAnimateInHighlight === shouldAnimateInHighlight && item.hash === hash) {
                 return item;
@@ -355,6 +375,7 @@ function useSearchSnapshot({queryJSON, searchResults, newSearchResultKeys, trans
         policyForMovingExpensesID,
         isChat,
         newSearchResultKeys,
+        previousNewSearchResultKeys,
         hash,
     ]);
 
