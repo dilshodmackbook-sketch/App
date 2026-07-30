@@ -786,8 +786,20 @@ function isSystemMessageAction(reportAction: OnyxInputOrEntry<ReportAction>): bo
         isPolicyChangeLogAction(reportAction) ||
         isMemberChangeAction(reportAction) ||
         isSimpleMessageAction(reportAction) ||
+        isSubmittedAction(reportAction) ||
+        isApprovedAction(reportAction) ||
+        isForwardedAction(reportAction) ||
+        isModifiedExpenseAction(reportAction) ||
         ADDITIONAL_SYSTEM_MESSAGE_ACTION_TYPES.has(reportAction.actionName)
     );
+}
+
+/**
+ * A system action with an unfinished `pendingAction` or an `errors` payload must never be hidden inside a collapsed
+ * run — the user has to see the optimistic/failed state and be able to retry or dismiss it.
+ */
+function isPendingOrErroredAction(reportAction: OnyxInputOrEntry<ReportAction>): boolean {
+    return !!reportAction?.pendingAction || !!reportAction?.errors;
 }
 
 type SystemMessageRun = {anchorID: string; memberIDs: string[]};
@@ -807,18 +819,25 @@ function getSystemMessageRuns(reportActions: ReportAction[], forceExpandedAction
             continue;
         }
         const memberIDs: string[] = [];
+        let hasPendingOrErroredMember = false;
         let end = index;
         while (end < reportActions.length && isSystemMessageAction(reportActions.at(end))) {
-            const memberID = reportActions.at(end)?.reportActionID;
+            const member = reportActions.at(end);
+            const memberID = member?.reportActionID;
             if (memberID) {
                 memberIDs.push(memberID);
             }
+            if (isPendingOrErroredAction(member)) {
+                hasPendingOrErroredMember = true;
+            }
             end += 1;
         }
-        const isForcedExpanded = !!forceExpandedActionIDs && memberIDs.some((id) => forceExpandedActionIDs.has(id));
+        const isForcedExpanded = hasPendingOrErroredMember || (!!forceExpandedActionIDs && memberIDs.some((id) => forceExpandedActionIDs.has(id)));
         if (memberIDs.length >= 2 && !isForcedExpanded) {
             const anchorID = memberIDs.at(0) ?? '';
-            memberIDs.forEach((id) => runs.set(id, {anchorID, memberIDs}));
+            for (const id of memberIDs) {
+                runs.set(id, {anchorID, memberIDs});
+            }
         }
         index = end;
     }
