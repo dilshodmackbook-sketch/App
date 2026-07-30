@@ -9204,6 +9204,7 @@ Ajoutez davantage de règles de dépenses pour protéger la trésorerie de l’e
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count} ${count === 1 ? 'modification effectuée' : 'modifications effectuées'}`,
         newReport: {
             createExpense: 'Créer une dépense',
             createReport: 'Créer une note de frais',

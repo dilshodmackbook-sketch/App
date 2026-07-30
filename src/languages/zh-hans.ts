@@ -8801,6 +8801,7 @@ ${reportName}`,
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `进行了 ${count} 项更改`,
         newReport: {
             createExpense: '创建报销',
             createReport: '创建报表',

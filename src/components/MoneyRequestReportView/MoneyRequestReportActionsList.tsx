@@ -38,6 +38,8 @@ import {
     isIOUActionMatchingTransactionList,
     isMoneyRequestAction,
     isReportActionVisible,
+    isSystemMessageAction,
+    getSystemMessageRuns,
     wasMessageReceivedWhileOffline,
 } from '@libs/ReportActionsUtils';
 import {canUserPerformWriteAction, chatIncludesChronosWithID, getReportLastVisibleActionCreated, isHarvestCreatedExpenseReport, isUnread, shouldShowMarkAsDone} from '@libs/ReportUtils';
@@ -49,6 +51,7 @@ import isSearchTopmostFullScreenRoute from '@navigation/helpers/isSearchTopmostF
 
 import {useActionListContext, useActionListRef} from '@pages/inbox/ActionListContext';
 import {useConciergeDraft} from '@pages/inbox/ConciergeDraftContext';
+import CollapsedSystemMessages from '@pages/inbox/report/CollapsedSystemMessages';
 import FloatingMessageCounter from '@pages/inbox/report/FloatingMessageCounter';
 import ReportActionIndexContext from '@pages/inbox/report/ReportActionIndexContext';
 import ReportActionsListItemRenderer from '@pages/inbox/report/ReportActionsListItemRenderer';
@@ -208,6 +211,20 @@ function MoneyRequestReportActionsList({onLayout}: MoneyRequestReportListProps) 
 
         return filteredActions.slice().reverse();
     }, [reportActions, isOffline, canPerformWriteAction, reportTransactionIDs, shouldShowHarvestCreatedAction, visibleReportActionsData, reportID]);
+
+    // Collapse runs of >= 2 consecutive system messages into a single expandable summary row.
+    const [expandedRunIDs, setExpandedRunIDs] = useState<Set<string>>(() => new Set<string>());
+    const toggleRun = useCallback((anchorID: string) => {
+        setExpandedRunIDs((prev) => {
+            const next = new Set(prev);
+            if (next.has(anchorID)) {
+                next.delete(anchorID);
+            } else {
+                next.add(anchorID);
+            }
+            return next;
+        });
+    }, []);
 
     const shouldShowOpenReportLoadingSkeleton = !isOffline && !!showReportActionsLoadingState && visibleReportActions.length === 0;
     const skeletonReasonAttributes: SkeletonSpanReasonAttributes = {
@@ -601,14 +618,45 @@ function MoneyRequestReportActionsList({onLayout}: MoneyRequestReportListProps) 
         }
     }, [visibleReportActions, lastActionEventId, enableScrollToEnd, scrollToBottom]);
 
+    // Runs holding the unread marker or a deep-linked action must stay expanded so those anchors still resolve.
+    const forceExpandedActionIDs = useMemo(() => {
+        const ids = new Set<string>();
+        if (unreadMarkerReportActionID) {
+            ids.add(unreadMarkerReportActionID);
+        }
+        if (linkedReportActionID) {
+            ids.add(linkedReportActionID);
+        }
+        return ids;
+    }, [unreadMarkerReportActionID, linkedReportActionID]);
+
+    const systemMessageRuns = useMemo(() => getSystemMessageRuns(visibleReportActions, forceExpandedActionIDs), [visibleReportActions, forceExpandedActionIDs]);
+
+    // The array the list renders: hidden run members are dropped so the data stays 1:1 with rendered rows.
+    const collapsedVisibleReportActions = useMemo(() => {
+        if (systemMessageRuns.size === 0) {
+            return visibleReportActions;
+        }
+        return visibleReportActions.filter((action) => {
+            const run = systemMessageRuns.get(action.reportActionID);
+            if (!run || expandedRunIDs.has(run.anchorID)) {
+                return true;
+            }
+            return run.anchorID === action.reportActionID;
+        });
+    }, [visibleReportActions, systemMessageRuns, expandedRunIDs]);
+
     const renderReportAction = useCallback(
         (reportAction: OnyxTypes.ReportAction, indexWithinReportActions: number) => {
             const displayAsGroup =
-                !isConsecutiveChronosAutomaticTimerAction(visibleReportActions, indexWithinReportActions, chatIncludesChronosWithID(reportAction?.reportID), isOffline) &&
-                hasNextActionMadeBySameActor(visibleReportActions, indexWithinReportActions, isOffline);
+                isSystemMessageAction(reportAction) ||
+                (!isConsecutiveChronosAutomaticTimerAction(collapsedVisibleReportActions, indexWithinReportActions, chatIncludesChronosWithID(reportAction?.reportID), isOffline) &&
+                    hasNextActionMadeBySameActor(collapsedVisibleReportActions, indexWithinReportActions, isOffline));
             const shouldDisableContextMenuForConciergeDraft = isDraftPendingCompletion && draftReportActionID === reportAction.reportActionID;
 
-            return (
+            const run = systemMessageRuns.get(reportAction.reportActionID);
+
+            const normalItem = (
                 <ReportActionIndexContext.Provider value={indexWithinReportActions}>
                     <ReportActionsListItemRenderer
                         reportAction={reportAction}
@@ -619,7 +667,7 @@ function MoneyRequestReportActionsList({onLayout}: MoneyRequestReportListProps) 
                         chatReport={chatReport}
                         displayAsGroup={displayAsGroup}
                         shouldDisplayNewMarker={reportAction.reportActionID === unreadMarkerReportActionID}
-                        shouldDisplayReplyDivider={visibleReportActions.length > 1}
+                        shouldDisplayReplyDivider={collapsedVisibleReportActions.length > 1}
                         isFirstVisibleReportAction={firstVisibleReportActionID === reportAction.reportActionID}
                         shouldHideThreadDividerLine
                         linkedReportActionID={linkedReportActionID}
@@ -628,9 +676,38 @@ function MoneyRequestReportActionsList({onLayout}: MoneyRequestReportListProps) 
                     />
                 </ReportActionIndexContext.Provider>
             );
+
+            // Only the run anchor renders the summary row; non-anchor members render normally (when expanded).
+            if (!run || run.anchorID !== reportAction.reportActionID) {
+                return normalItem;
+            }
+
+            const isRunExpanded = expandedRunIDs.has(run.anchorID);
+            const anchorID = run.anchorID;
+            const summaryRow = (
+                <CollapsedSystemMessages
+                    count={run.memberIDs.length}
+                    isExpanded={isRunExpanded}
+                    onPress={() => toggleRun(anchorID)}
+                />
+            );
+
+            // Collapsed: only the summary row (members were filtered out). Expanded: summary row + this anchor's own row.
+            if (!isRunExpanded) {
+                return summaryRow;
+            }
+            return (
+                <>
+                    {summaryRow}
+                    {normalItem}
+                </>
+            );
         },
         [
-            visibleReportActions,
+            collapsedVisibleReportActions,
+            systemMessageRuns,
+            expandedRunIDs,
+            toggleRun,
             parentReportAction,
             reportStable,
             chatReport,
@@ -763,9 +840,9 @@ function MoneyRequestReportActionsList({onLayout}: MoneyRequestReportListProps) 
                         hasPendingDeletionTransaction={hasPendingDeletionTransaction}
                         reportActions={reportActions}
                         policy={policy}
-                        hasComments={visibleReportActions.length > 0}
+                        hasComments={collapsedVisibleReportActions.length > 0}
                         isLoadingInitialReportActions={showReportActionsLoadingState}
-                        visibleReportActions={visibleReportActions}
+                        visibleReportActions={collapsedVisibleReportActions}
                         renderReportAction={renderReportAction}
                         reportActionsExtraData={reportActionsExtraData}
                         linkedReportActionID={linkedReportActionID}

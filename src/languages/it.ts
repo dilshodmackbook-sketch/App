@@ -9149,6 +9149,7 @@ Aggiungi altre regole di spesa per proteggere il flusso di cassa aziendale.`,
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count} ${count === 1 ? 'modifica effettuata' : 'modifiche effettuate'}`,
         newReport: {
             createExpense: 'Crea spesa',
             createReport: 'Crea resoconto',

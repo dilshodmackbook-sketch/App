@@ -9100,6 +9100,7 @@ Dodaj więcej zasad wydatków, żeby chronić płynność finansową firmy.`,
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `Wprowadzono ${count} ${count === 1 ? 'zmianę' : 'zmiany'}`,
         newReport: {
             createExpense: 'Utwórz wydatek',
             createReport: 'Utwórz raport',

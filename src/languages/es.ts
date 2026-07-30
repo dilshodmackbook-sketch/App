@@ -8965,6 +8965,7 @@ El plan Controlar empieza en 9 $ por miembro activo al mes.`,
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count} ${count === 1 ? 'cambio realizado' : 'cambios realizados'}`,
         newReport: {
             createExpense: 'Crear gasto',
             createReport: 'Crear informe',

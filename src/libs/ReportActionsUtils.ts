@@ -725,6 +725,106 @@ function isRejectedAction(reportAction: OnyxInputOrEntry<ReportAction>): boolean
     return isActionOfType(reportAction, CONST.REPORT.ACTIONS.TYPE.REJECTED) || isActionOfType(reportAction, CONST.REPORT.ACTIONS.TYPE.REJECTED_TO_SUBMITTER);
 }
 
+/**
+ * Simple, muted audit-trail messages (hold/unhold, dismissed violation, deleted transaction, change policy, etc.).
+ * Moved here from `SimpleMessageContent` so both the inbox and money-request timelines can classify without duplication.
+ */
+const SIMPLE_MESSAGE_ACTION_TYPES = new Set<string>([
+    CONST.REPORT.ACTIONS.TYPE.MARKED_REIMBURSED,
+    CONST.REPORT.ACTIONS.TYPE.HOLD,
+    CONST.REPORT.ACTIONS.TYPE.HOLD_COMMENT,
+    CONST.REPORT.ACTIONS.TYPE.UNHOLD,
+    CONST.REPORT.ACTIONS.TYPE.REJECTEDTRANSACTION_THREAD,
+    CONST.REPORT.ACTIONS.TYPE.REJECTED_TRANSACTION_MARKASRESOLVED,
+    CONST.REPORT.ACTIONS.TYPE.RETRACTED,
+    CONST.REPORT.ACTIONS.TYPE.REOPENED,
+    CONST.REPORT.ACTIONS.TYPE.CHANGE_POLICY,
+    CONST.REPORT.ACTIONS.TYPE.DELETED_TRANSACTION,
+    CONST.REPORT.ACTIONS.TYPE.MERGED_WITH_CASH_TRANSACTION,
+    CONST.REPORT.ACTIONS.TYPE.DISMISSED_VIOLATION,
+    CONST.REPORT.ACTIONS.TYPE.RESOLVED_DUPLICATES,
+    CONST.REPORT.ACTIONS.TYPE.DEMOTED_FROM_WORKSPACE,
+    CONST.REPORT.ACTIONS.TYPE.ACTIONABLE_CARD_3DS_TRANSACTION_APPROVAL,
+    CONST.REPORT.ACTIONS.TYPE.MARK_REIMBURSED_FROM_INTEGRATION,
+]);
+
+function isSimpleMessageAction(reportAction: OnyxInputOrEntry<ReportAction>): boolean {
+    if (!reportAction?.actionName) {
+        return false;
+    }
+    return SIMPLE_MESSAGE_ACTION_TYPES.has(reportAction.actionName) || isUnapprovedAction(reportAction) || isRejectedAction(reportAction);
+}
+
+/**
+ * Muted audit-trail types that render as system text in `ActionContentRouter` but are not covered by
+ * `isPolicyChangeLogAction`, `isMemberChangeAction`, or `isSimpleMessageAction`.
+ */
+const ADDITIONAL_SYSTEM_MESSAGE_ACTION_TYPES = new Set<string>([
+    CONST.REPORT.ACTIONS.TYPE.EXPORTED_TO_INTEGRATION,
+    CONST.REPORT.ACTIONS.TYPE.INTEGRATION_SYNC_FAILED,
+    CONST.REPORT.ACTIONS.TYPE.COMPANY_CARD_CONNECTION_BROKEN,
+    CONST.REPORT.ACTIONS.TYPE.PLAID_BALANCE_FAILURE,
+    CONST.REPORT.ACTIONS.TYPE.CREATED_REPORT_FOR_UNAPPROVED_TRANSACTIONS,
+    CONST.REPORT.ACTIONS.TYPE.TAKE_CONTROL,
+    CONST.REPORT.ACTIONS.TYPE.REROUTE,
+    CONST.REPORT.ACTIONS.TYPE.REASSIGN_APPROVER,
+    CONST.REPORT.ACTIONS.TYPE.SETTLEMENT_ACCOUNT_LOCKED,
+    CONST.REPORT.ACTIONS.TYPE.REMOVED_FROM_APPROVAL_CHAIN,
+    CONST.REPORT.ACTIONS.TYPE.RENAMED,
+]);
+
+/**
+ * Allow-list classifier: is this a passive, no-avatar system/audit-trail entry that may be collapsed into a run?
+ * Deliberately NOT `!isAddCommentAction(...)` — a negation would sweep in interactive previews and actionable
+ * whispers, stripping their avatars and hiding them where the user can no longer act on them.
+ */
+function isSystemMessageAction(reportAction: OnyxInputOrEntry<ReportAction>): boolean {
+    if (!reportAction?.actionName || isDeletedAction(reportAction)) {
+        return false;
+    }
+    return (
+        isPolicyChangeLogAction(reportAction) ||
+        isMemberChangeAction(reportAction) ||
+        isSimpleMessageAction(reportAction) ||
+        ADDITIONAL_SYSTEM_MESSAGE_ACTION_TYPES.has(reportAction.actionName)
+    );
+}
+
+type SystemMessageRun = {anchorID: string; memberIDs: string[]};
+
+/**
+ * Walks an ordered list of visible actions and returns a map keyed by every action ID that belongs to a
+ * collapsible run of >= 2 consecutive system messages. The anchor is always the first array element of the run,
+ * so callers do not need to reason about list direction (the inbox list is descending, the money-request list is
+ * ascending). A run containing any `forceExpandedActionIDs` member is left out of the map so it renders expanded.
+ */
+function getSystemMessageRuns(reportActions: ReportAction[], forceExpandedActionIDs?: Set<string>): Map<string, SystemMessageRun> {
+    const runs = new Map<string, SystemMessageRun>();
+    let index = 0;
+    while (index < reportActions.length) {
+        if (!isSystemMessageAction(reportActions.at(index))) {
+            index += 1;
+            continue;
+        }
+        const memberIDs: string[] = [];
+        let end = index;
+        while (end < reportActions.length && isSystemMessageAction(reportActions.at(end))) {
+            const memberID = reportActions.at(end)?.reportActionID;
+            if (memberID) {
+                memberIDs.push(memberID);
+            }
+            end += 1;
+        }
+        const isForcedExpanded = !!forceExpandedActionIDs && memberIDs.some((id) => forceExpandedActionIDs.has(id));
+        if (memberIDs.length >= 2 && !isForcedExpanded) {
+            const anchorID = memberIDs.at(0) ?? '';
+            memberIDs.forEach((id) => runs.set(id, {anchorID, memberIDs}));
+        }
+        index = end;
+    }
+    return runs;
+}
+
 function isInviteOrRemovedAction(
     reportAction: OnyxInputOrEntry<ReportAction>,
 ): reportAction is ReportAction<ValueOf<typeof CONST.REPORT.ACTIONS.TYPE.POLICY_CHANGE_LOG | typeof CONST.REPORT.ACTIONS.TYPE.ROOM_CHANGE_LOG>> {
@@ -5001,6 +5101,9 @@ export {
     getTravelNudgeMessage,
     shouldShowActivateCard,
     isRejectedAction,
+    isSimpleMessageAction,
+    isSystemMessageAction,
+    getSystemMessageRuns,
     isReopenedAction,
     isRetractedAction,
     getIntegrationSyncFailedMessage,

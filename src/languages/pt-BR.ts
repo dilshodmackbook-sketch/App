@@ -9108,6 +9108,7 @@ Adicione mais regras de gasto para proteger o fluxo de caixa da empresa.`,
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count} ${count === 1 ? 'alteração realizada' : 'alterações realizadas'}`,
         newReport: {
             createExpense: 'Criar despesa',
             createReport: 'Criar relatório',

@@ -9121,6 +9121,7 @@ er bestedingsregels toe om de kasstroom van het bedrijf te beschermen.`,
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count} ${count === 1 ? 'wijziging' : 'wijzigingen'} aangebracht`,
         newReport: {
             createExpense: 'Uitgave aanmaken',
             createReport: 'Rapport maken',

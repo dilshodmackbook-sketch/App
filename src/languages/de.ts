@@ -9168,6 +9168,7 @@ Fügen Sie weitere Ausgabelimits hinzu, um den Cashflow Ihres Unternehmens zu sc
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count} ${count === 1 ? 'Änderung wurde' : 'Änderungen wurden'} vorgenommen`,
         newReport: {
             createExpense: 'Ausgabe erstellen',
             createReport: 'Bericht erstellen',

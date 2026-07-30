@@ -9296,6 +9296,7 @@ const translations = {
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count} ${count === 1 ? 'change was' : 'changes were'} done`,
         newReport: {
             createExpense: 'Create expense',
             createReport: 'Create report',

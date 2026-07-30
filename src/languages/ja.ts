@@ -9026,6 +9026,7 @@ ${reportName}`,
         },
     },
     report: {
+        collapsedSystemMessages: ({count}: {count: number}) => `${count}件の変更が行われました`,
         newReport: {
             createExpense: '経費を作成',
             createReport: 'レポートを作成',
