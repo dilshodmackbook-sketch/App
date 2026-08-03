@@ -16,7 +16,7 @@ import {getCurrencyUnit} from './CurrencyUtils';
 import Navigation from './Navigation/Navigation';
 import {isGroupPolicy} from './PolicyUtils';
 import {getOriginalMessage, isMoneyRequestAction} from './ReportActionsUtils';
-import {generateReportID, getChatByParticipants, isProcessingReport, isReportOutstanding, isSelfDM} from './ReportUtils';
+import {generateReportID, getChatByParticipants, isReportOutstanding, isSelfDM} from './ReportUtils';
 import {endSpan, getSpan, startSpan} from './telemetry/activeSpans';
 import {getTagArrayFromName, hasRoute, isDistanceRequest} from './TransactionUtils';
 
@@ -562,7 +562,10 @@ function resolveReportForMoneyRequest({
     if (transaction?.reportID === CONST.REPORT.UNREPORTED_REPORT_ID) {
         return undefined;
     }
-    const canUseTransactionReport = !(isProcessingReport(transactionReport) && !policy?.harvesting?.enabled) && isReportOutstanding(transactionReport, policy?.id, undefined, false);
+    // Mirror the confirm-page Report picker, which offers a report when isReportOutstanding(report, policyID, rnvp, allowSubmitted=false)
+    // is true (see useOutstandingReports called with isEditing=false in ReportField). Gating on the same predicate here honors an
+    // explicitly-picked submitted-but-addable report instead of dropping it and falling back to chatReport.iouReportID.
+    const canUseTransactionReport = isReportOutstanding(transactionReport, policy?.id, undefined, false);
     const shouldUseTransactionReport = !!transactionReport && (canUseTransactionReport || !routeReport);
     if (shouldUseTransactionReport) {
         return transactionReport;
