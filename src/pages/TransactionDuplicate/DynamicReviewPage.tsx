@@ -71,7 +71,17 @@ function DynamicReviewPage() {
 
     const isASAPSubmitBetaEnabled = isBetaEnabled(CONST.BETAS.ASAP_SUBMIT);
     const reportAction = getReportAction(report?.parentReportID, report?.parentReportActionID);
-    const transactionID = getLinkedTransactionID(reportAction);
+    const linkedTransactionID = getLinkedTransactionID(reportAction);
+    // Offline, the parent IOU action may never have been loaded and can't be fetched.
+    // The duplicated transaction that triggered this review is already in Onyx, so fall back to it.
+    const fallbackTransactionID = Object.values(allTransactions ?? {}).find(
+        (transaction) =>
+            transaction?.reportID === report?.parentReportID &&
+            allTransactionViolations?.[`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${transaction?.transactionID}`]?.some(
+                (violation) => violation.name === CONST.VIOLATIONS.DUPLICATED_TRANSACTION,
+            ),
+    )?.transactionID;
+    const transactionID = linkedTransactionID ?? fallbackTransactionID;
     const transactionViolations = useTransactionViolations(transactionID);
     const duplicateTransactionIDs = transactionViolations?.find((violation) => violation.name === CONST.VIOLATIONS.DUPLICATED_TRANSACTION)?.data?.duplicates ?? [];
     const transactionIDs = transactionID ? [transactionID, ...duplicateTransactionIDs] : duplicateTransactionIDs;
@@ -103,13 +113,16 @@ function DynamicReviewPage() {
         parentReportAction: reportAction,
         parentReportLoadingState,
         isOffline,
+        // A never-fetched parent action must not be treated as deleted just because we're offline
+        hasLoadedParentReportActions: hasLoadedReportActions(parentReportLoadingState),
         shouldRequireParentReportActionID: false,
         shouldTreatMissingParentReportAsDeleted: true,
     });
     const wasTransactionDeleted = isThreadReportDeletedForReview || wasParentActionDeleted;
     const isLoadingPage =
-        (!report?.reportID && !hasLoadedThreadReportActions && !isThreadReportDeletedForReview) ||
-        (!reportAction?.reportActionID && !hasLoadedParentReportActions && !wasParentActionDeleted && !isThreadReportDeletedForReview);
+        !transactionID &&
+        ((!report?.reportID && !hasLoadedThreadReportActions && !isThreadReportDeletedForReview) ||
+            (!reportAction?.reportActionID && !hasLoadedParentReportActions && !wasParentActionDeleted && !isThreadReportDeletedForReview));
     const isDeleteNavigateBackToThisReview = doesDeleteNavigateBackUrlIncludeSpecificDuplicatesReview(deleteTransactionNavigateBackUrl, route.params.reportID);
     const isNavigatingBackToDeletedReview = !!deleteTransactionNavigateBackUrl && !(isDeleteNavigateBackToThisReview && wasTransactionDeleted);
 
