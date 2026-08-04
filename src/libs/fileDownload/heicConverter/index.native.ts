@@ -5,8 +5,20 @@ import CONST from '@src/CONST';
 import type {FileObject} from '@src/types/utils/Attachment';
 
 import {ImageManipulator, SaveFormat} from 'expo-image-manipulator';
+import RNFetchBlob from 'react-native-blob-util';
 
 import type {HeicConverterFunction} from './types';
+
+/**
+ * Reads the real byte size of the converted JPEG on disk. The manipulator result only exposes uri/width/height,
+ * so without this the converted file would be stamped with the original HEIC size, and the downstream
+ * RECEIPT_MAX_SIZE resize gate would evaluate the wrong number. Falls back to the original size on failure.
+ */
+const getConvertedFileSize = (uri: string, fallbackSize?: number | null): Promise<number | null | undefined> =>
+    RNFetchBlob.fs
+        .stat(uri.replace('file://', ''))
+        .then((stat) => Number(stat.size))
+        .catch(() => fallbackSize);
 
 /**
  * Helper function to convert HEIC/HEIF image to JPEG using ImageManipulator
@@ -33,17 +45,19 @@ const convertImageWithManipulator = (
     imageManipulatorContext
         .renderAsync()
         .then((manipulatedImage) => manipulatedImage.saveAsync({format: SaveFormat.JPEG}))
-        .then((manipulationResult) => {
-            const convertedFile = {
-                uri: manipulationResult.uri,
-                name: file.name?.replace(originalExtension, '.jpg') ?? 'converted-image.jpg',
-                type: 'image/jpeg',
-                size: file.size,
-                width: manipulationResult.width,
-                height: manipulationResult.height,
-            };
-            onSuccess(convertedFile);
-        })
+        .then((manipulationResult) =>
+            getConvertedFileSize(manipulationResult.uri, file.size).then((size) => {
+                const convertedFile = {
+                    uri: manipulationResult.uri,
+                    name: file.name?.replace(originalExtension, '.jpg') ?? 'converted-image.jpg',
+                    type: 'image/jpeg',
+                    size,
+                    width: manipulationResult.width,
+                    height: manipulationResult.height,
+                };
+                onSuccess(convertedFile);
+            }),
+        )
         .catch((err) => {
             Log.warn('Error converting HEIC/HEIF to JPEG', {error: err instanceof Error ? err.message : String(err)});
             onError(err, file);

@@ -218,39 +218,42 @@ function useFilesValidation(onFilesValidated: (files: FileObject[], dataTransfer
 
             const convertedFilesToResize: FileObject[] = [];
             const convertedFiles: FileObject[] = [];
-            await Promise.all(
-                filesToConvert.map(
-                    (file) =>
-                        new Promise<void>((resolve) => {
-                            convertHeicImage(file, {
-                                onSuccess: (convertedFile) => {
-                                    if (validationState.isValidatingReceipts && convertedFile.size && convertedFile.size > CONST.API_ATTACHMENT_VALIDATIONS.RECEIPT_MAX_SIZE) {
-                                        convertedFilesToResize.push(convertedFile);
-                                        resolve();
-                                        return;
-                                    }
+            // Convert one file at a time so only a single full-resolution bitmap is decoded and held in native
+            // memory at any moment. Fanning the whole batch out with Promise.all decodes every selected HEIC
+            // concurrently (~40-50 MB RGBA each for a 12MP photo), which blows past the iOS jetsam limit for
+            // large batches (e.g. 30 files) and gets the app killed — the same batch-decode hazard the
+            // sequential validation loop above already guards against.
+            for (const file of filesToConvert) {
+                // eslint-disable-next-line no-await-in-loop
+                await new Promise<void>((resolve) => {
+                    convertHeicImage(file, {
+                        onSuccess: (convertedFile) => {
+                            if (validationState.isValidatingReceipts && convertedFile.size && convertedFile.size > CONST.API_ATTACHMENT_VALIDATIONS.RECEIPT_MAX_SIZE) {
+                                convertedFilesToResize.push(convertedFile);
+                                resolve();
+                                return;
+                            }
 
-                                    if (!validationState.isValidatingReceipts && convertedFile.size && convertedFile.size > CONST.API_ATTACHMENT_VALIDATIONS.MAX_SIZE) {
-                                        collectedErrors.current.push({
-                                            error: CONST.FILE_VALIDATION_ERRORS.FILE_TOO_LARGE,
-                                            isValidatingMultipleFiles: validationState.isValidatingMultipleFiles,
-                                        });
-                                        resolve();
-                                        return;
-                                    }
+                            if (!validationState.isValidatingReceipts && convertedFile.size && convertedFile.size > CONST.API_ATTACHMENT_VALIDATIONS.MAX_SIZE) {
+                                collectedErrors.current.push({
+                                    error: CONST.FILE_VALIDATION_ERRORS.FILE_TOO_LARGE,
+                                    isValidatingMultipleFiles: validationState.isValidatingMultipleFiles,
+                                });
+                                resolve();
+                                return;
+                            }
 
-                                    convertedFiles.push(convertedFile);
-                                    resolve();
-                                },
-                                onError: () => {
-                                    Log.warn('HEIC conversion failed, falling back to original file', {fileName: file.name});
-                                    convertedFiles.push(file);
-                                    resolve();
-                                },
-                            });
-                        }),
-                ),
-            );
+                            convertedFiles.push(convertedFile);
+                            resolve();
+                        },
+                        onError: () => {
+                            Log.warn('HEIC conversion failed, falling back to original file', {fileName: file.name});
+                            convertedFiles.push(file);
+                            resolve();
+                        },
+                    });
+                });
+            }
 
             filesToResize.push(...convertedFilesToResize);
             validNonPdfFiles.push(...convertedFiles);
@@ -263,7 +266,17 @@ function useFilesValidation(onFilesValidated: (files: FileObject[], dataTransfer
         if (filesToResize.length > 0) {
             showLoader();
 
-            const toResizeResults = await Promise.allSettled(filesToResize.map((file) => resizeImageIfNeeded(file)));
+            // Resize one file at a time for the same reason as the conversion loop above: resizeImageIfNeeded
+            // decodes the full-resolution image, so a Promise.allSettled fan-out over an oversized batch is a
+            // second concurrent-decode OOM vector in the exact same repro.
+            const toResizeResults: Array<PromiseSettledResult<FileObject>> = [];
+            for (const file of filesToResize) {
+                // eslint-disable-next-line no-await-in-loop
+                const result = await resizeImageIfNeeded(file)
+                    .then((value): PromiseSettledResult<FileObject> => ({status: 'fulfilled', value}))
+                    .catch((reason: unknown): PromiseSettledResult<FileObject> => ({status: 'rejected', reason}));
+                toResizeResults.push(result);
+            }
 
             for (const [index, result] of toResizeResults.entries()) {
                 if (result.status === 'fulfilled') {
