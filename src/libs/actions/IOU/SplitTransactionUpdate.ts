@@ -119,6 +119,12 @@ type UpdateSplitTransactionsParams = {
     isOffline: boolean;
     delegateAccountID: number | undefined;
     isTrackIntentUser: boolean | undefined;
+
+    /** Self-DM report ID resolved by the caller, so the action can skip a full-collection scan for it. */
+    selfDMReportID?: string;
+
+    /** Child split transactions (isProduction=false) precomputed by the flow, to avoid re-scanning the whole transaction collection. */
+    precomputedAllChildTransactions?: ReturnType<typeof getChildTransactions>;
 };
 
 /**
@@ -200,6 +206,8 @@ function updateSplitTransactions({
     isOffline,
     delegateAccountID,
     isTrackIntentUser,
+    selfDMReportID,
+    precomputedAllChildTransactions,
 }: UpdateSplitTransactionsParams) {
     const parentTransactionReport = getReportOrDraftReport(transactionReport?.parentReportID);
     // For selfDM-origin splits the caller can't resolve a real `expenseReport` (the draft/source
@@ -273,7 +281,7 @@ function updateSplitTransactions({
 
     const splitExpenses = transactionData?.splitExpenses ?? [];
 
-    const allChildTransactions = getChildTransactions(allTransactionsList, originalTransactionID, false);
+    const allChildTransactions = precomputedAllChildTransactions ?? getChildTransactions(allTransactionsList, originalTransactionID, false);
     const processedChildTransactionIDs: string[] = [];
 
     const splitExpensesTotal = transactionData?.splitExpensesTotal ?? 0;
@@ -358,7 +366,9 @@ function updateSplitTransactions({
         optimisticData: [],
     };
 
-    const selfDMReport = Object.values(allReportsList ?? {}).find((r) => isSelfDM(r));
+    // Prefer the self-DM report ID resolved by the caller (single keyed lookup) and fall back to a
+    // full-collection scan only when it isn't provided, so behavior is identical for callers/tests that omit it.
+    const selfDMReport = selfDMReportID ? allReportsList?.[`${ONYXKEYS.COLLECTION.REPORT}${selfDMReportID}`] : Object.values(allReportsList ?? {}).find((r) => isSelfDM(r));
 
     // The split transactions can be in different reports, so we need to calculate the total for each report.
     const reportTotals = new Map<string, number>();
@@ -2016,11 +2026,7 @@ function updateSplitTransactionsFromSplitExpensesFlow(params: UpdateSplitTransac
     const reverseSplitKeepsOriginalInExpenseReport = isReverseSplitOperation && splitExpenses.at(0)?.reportID === expenseReportID;
     const willExpenseReportBecomeEmpty =
         !!expenseReportID && areAllExpenseReportTransactionsSplitChildren && !anyRemainingSplitStaysInExpenseReport && !reverseSplitKeepsOriginalInExpenseReport;
-    const isLastTransactionInReport =
-        willExpenseReportBecomeEmpty ||
-        (isReverseSplitOperation &&
-            !reverseSplitKeepsOriginalInExpenseReport &&
-            Object.values(params.allTransactionsList ?? {}).filter((itemTransaction) => itemTransaction?.reportID === expenseReportID).length === 1);
+    const isLastTransactionInReport = willExpenseReportBecomeEmpty || (isReverseSplitOperation && !reverseSplitKeepsOriginalInExpenseReport && expenseReportTransactions.length === 1);
     const fallbackReportID = params.expenseReport?.chatReportID ?? params.expenseReport?.parentReportID;
 
     if (isLastTransactionInReport && fallbackReportID) {
@@ -2045,7 +2051,7 @@ function updateSplitTransactionsFromSplitExpensesFlow(params: UpdateSplitTransac
         popReportsSplitNavigatorToReport(selfDMReportID);
         Navigation.dismissModal();
         requestAnimationFrame(() => {
-            updateSplitTransactions({...params, isFromSplitExpensesFlow: true});
+            updateSplitTransactions({...params, isFromSplitExpensesFlow: true, precomputedAllChildTransactions: allChildTransactions});
         });
         params?.searchContext?.clearSelectedTransactions?.(true);
         return;
@@ -2091,7 +2097,7 @@ function updateSplitTransactionsFromSplitExpensesFlow(params: UpdateSplitTransac
 
     if (isSearchPageTopmostFullScreenRoute || !params.transactionReport?.parentReportID) {
         registerSearchRouteHighlight();
-        updateSplitTransactions({...params, isFromSplitExpensesFlow: true});
+        updateSplitTransactions({...params, isFromSplitExpensesFlow: true, precomputedAllChildTransactions: allChildTransactions});
 
         if (!isSelfDMSplit) {
             Navigation.navigateBackToLastSuperWideRHPScreen();
@@ -2114,7 +2120,7 @@ function updateSplitTransactionsFromSplitExpensesFlow(params: UpdateSplitTransac
     // (dismissToSuperWideRHP + goBack) instead of dismissModalWithReport. This naturally pops
     // stale screens from the stack instead of leaving them behind.
     if (isLastTransactionInReport && fallbackReportID) {
-        updateSplitTransactions({...params, isFromSplitExpensesFlow: true});
+        updateSplitTransactions({...params, isFromSplitExpensesFlow: true, precomputedAllChildTransactions: allChildTransactions});
 
         const backRoute = ROUTES.REPORT_WITH_ID.getRoute(fallbackReportID);
         navigateBackOnDeleteTransaction(backRoute);
@@ -2148,7 +2154,7 @@ function updateSplitTransactionsFromSplitExpensesFlow(params: UpdateSplitTransac
     popReportsSplitNavigatorToReport(targetReportID);
     Navigation.dismissModalWithReport({reportID: targetReportID});
     requestAnimationFrame(() => {
-        updateSplitTransactions({...params, isFromSplitExpensesFlow: true});
+        updateSplitTransactions({...params, isFromSplitExpensesFlow: true, precomputedAllChildTransactions: allChildTransactions});
         if (!transactionThreadReportScreen?.key) {
             return;
         }

@@ -402,6 +402,7 @@ function SplitExpensePage({route}: SplitExpensePageProps) {
             isOffline,
             delegateAccountID,
             isTrackIntentUser,
+            selfDMReportID,
         });
     };
 
