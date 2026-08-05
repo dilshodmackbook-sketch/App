@@ -42,6 +42,7 @@ import type {TransactionCollectionDataSet} from '@src/types/onyx/Transaction';
 import type CollectionDataSet from '@src/types/utils/CollectionDataSet';
 
 import type {OnyxEntry} from 'react-native-onyx';
+import type {ValueOf} from 'type-fest';
 
 import Onyx from 'react-native-onyx';
 
@@ -2509,6 +2510,78 @@ describe('actions/IOU/ReportWorkflow', () => {
             // When the invoice is archived
             expect(canIOUBePaid(iouReport, chatReport, policy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, [], true, chatReportRNVP, invoiceReceiverPolicy)).toBe(false);
             expect(canIOUBePaid(iouReport, chatReport, policy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, [], false, chatReportRNVP, invoiceReceiverPolicy)).toBe(false);
+        });
+
+        describe('Mark as paid (pay-elsewhere) parity across reimbursement modes', () => {
+            const ADMIN_EMAIL = 'admin@markaspaid.com';
+            const ADMIN_ACCOUNT_ID = 8001;
+            const REIMBURSER_EMAIL = 'reimburser@markaspaid.com';
+            const POLICY_ID = 'A1B2C3D4E5F60001';
+            const CHAT_REPORT_ID = '80010';
+            const EXPENSE_REPORT_ID = '80011';
+
+            const chatReport: Report = {
+                ...createRandomReport(Number(CHAT_REPORT_ID)),
+                reportID: CHAT_REPORT_ID,
+                chatType: CONST.REPORT.CHAT_TYPE.POLICY_EXPENSE_CHAT,
+                policyID: POLICY_ID,
+            };
+
+            // Approved expense report (stateNum/statusNum APPROVED) with a positive reimbursable spend.
+            const approvedExpenseReport: Report = {
+                ...createRandomReport(Number(EXPENSE_REPORT_ID)),
+                reportID: EXPENSE_REPORT_ID,
+                chatReportID: CHAT_REPORT_ID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                policyID: POLICY_ID,
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+                total: -5000,
+                nonReimbursableTotal: 0,
+                isWaitingOnBankAccount: false,
+            };
+
+            function buildPolicy(reimbursementChoice: ValueOf<typeof CONST.POLICY.REIMBURSEMENT_CHOICES>): Policy {
+                return {
+                    ...createRandomPolicy(Number('8001'), CONST.POLICY.TYPE.TEAM),
+                    id: POLICY_ID,
+                    type: CONST.POLICY.TYPE.TEAM,
+                    role: CONST.POLICY.ROLE.ADMIN,
+                    reimbursementChoice,
+                    employeeList: {
+                        [ADMIN_EMAIL]: {role: CONST.POLICY.ROLE.ADMIN},
+                        [REIMBURSER_EMAIL]: {role: CONST.POLICY.ROLE.ADMIN},
+                    },
+                    achAccount: {
+                        reimburser: REIMBURSER_EMAIL,
+                        bankAccountID: 1,
+                        accountNumber: '1234567890',
+                        routingNumber: '987654321',
+                        addressName: 'Test Address',
+                        bankName: 'Test Bank',
+                    },
+                };
+            }
+
+            it('lets a non-payer admin mark an approved report as paid on a Direct (electronic) reimbursement workspace', async () => {
+                const directPolicy = buildPolicy(CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_YES);
+                await Onyx.set(`${ONYXKEYS.COLLECTION.POLICY}${POLICY_ID}`, directPolicy);
+                await waitForBatchedUpdates();
+
+                // Pay-elsewhere ("Mark as paid") is now offered to any workspace admin, matching Classic and the manual-mode behavior.
+                expect(canIOUBePaid(approvedExpenseReport, chatReport, directPolicy, {}, ADMIN_EMAIL, ADMIN_ACCOUNT_ID, [], true)).toBe(true);
+
+                // The real electronic-pay path stays gated: a non-reimburser admin without bank-account access still can't initiate it.
+                expect(canIOUBePaid(approvedExpenseReport, chatReport, directPolicy, {}, ADMIN_EMAIL, ADMIN_ACCOUNT_ID, [], false)).toBe(false);
+            });
+
+            it('keeps mark-as-paid available for a non-payer admin on a Manual reimbursement workspace (regression)', async () => {
+                const manualPolicy = buildPolicy(CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_MANUAL);
+                await Onyx.set(`${ONYXKEYS.COLLECTION.POLICY}${POLICY_ID}`, manualPolicy);
+                await waitForBatchedUpdates();
+
+                expect(canIOUBePaid(approvedExpenseReport, chatReport, manualPolicy, {}, ADMIN_EMAIL, ADMIN_ACCOUNT_ID, [], true)).toBe(true);
+            });
         });
     });
 

@@ -236,9 +236,14 @@ function canIOUBePaid(
     }
 
     const isReportPayer = isPayerReportUtils(currentUserAccountID, currentUserLogin, iouReport, bankAccountList, policy, onlyShowPayElsewhere);
+    // "Mark as paid" (pay-elsewhere) is a manual settlement that doesn't touch a bank account, so any member with
+    // Workflows-Payments write access can perform it in every reimbursement mode (matching Classic). The real
+    // electronic-pay path (onlyShowPayElsewhere === false) keeps its manual-only fallback so direct/auto payouts
+    // still route through the designated payer / bank-account sharee.
     const canPay =
         isReportPayer ||
-        (policy?.reimbursementChoice === CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_MANUAL && canMemberWrite(policy, currentUserLogin, CONST.POLICY.POLICY_FEATURE.WORKFLOWS_PAYMENTS));
+        ((policy?.reimbursementChoice === CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_MANUAL || onlyShowPayElsewhere) &&
+            canMemberWrite(policy, currentUserLogin, CONST.POLICY.POLICY_FEATURE.WORKFLOWS_PAYMENTS));
 
     const {reimbursableSpend, nonReimbursableSpend} = getMoneyRequestSpendBreakdown(iouReport);
     const isAutoReimbursable = policy?.reimbursementChoice === CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_YES ? false : canBeAutoReimbursed(iouReport, policy);
