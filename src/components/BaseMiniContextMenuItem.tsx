@@ -46,6 +46,11 @@ type BaseMiniContextMenuItemProps = WithSentryLabel & {
     shouldPreventDefaultFocusOnPress?: boolean;
 
     /**
+     * Called when the item receives keyboard focus
+     */
+    onFocus?: () => void;
+
+    /**
      * Reference to the outer element
      */
     ref?: PressableRef;
@@ -61,6 +66,7 @@ function BaseMiniContextMenuItem({
     children,
     isDelayButtonStateComplete = true,
     shouldPreventDefaultFocusOnPress = true,
+    onFocus,
     ref,
     sentryLabel,
 }: BaseMiniContextMenuItemProps) {
@@ -74,6 +80,7 @@ function BaseMiniContextMenuItem({
             <PressableWithoutFeedback
                 ref={ref}
                 onPress={onPress}
+                onFocus={onFocus}
                 onMouseDown={(event) => {
                     if (!ReportActionComposeFocusManager.isFocused() && !ReportActionComposeFocusManager.isEditFocused()) {
                         const activeElement = DomUtils.getActiveElement();
