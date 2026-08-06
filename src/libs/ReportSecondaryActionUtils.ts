@@ -413,9 +413,19 @@ function isCancelPaymentAction(
     }
 
     const isAdmin = policy?.role === CONST.POLICY.ROLE.ADMIN;
-    const isPayer = isPayerUtils(currentAccountID, currentUserEmail, report, bankAccountList, policy, false);
 
-    if (!isAdmin || !isPayer) {
+    if (!isAdmin) {
+        return false;
+    }
+
+    // Align cancel eligibility with the pay gate: the designated reimburser/payer, or any admin with Payments write
+    // access on a manual-reimbursement workspace (the same WORKFLOWS_PAYMENTS branch canIOUBePaid uses). Without this,
+    // a non-reimburser admin who could mark the report paid cannot cancel it.
+    const canCancelPayment =
+        isPayerUtils(currentAccountID, currentUserEmail, report, bankAccountList, policy, false) ||
+        (policy?.reimbursementChoice === CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_MANUAL && canMemberWrite(policy, currentUserEmail, CONST.POLICY.POLICY_FEATURE.WORKFLOWS_PAYMENTS));
+
+    if (!canCancelPayment) {
         return false;
     }
 
