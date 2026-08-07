@@ -716,4 +716,55 @@ describe('DateUtils', () => {
             expect(DateUtils.getRemainingSecondsInWindow(Date.now() - 31 * 1000, windowMs)).toBe(0);
         });
     });
+
+    // Regression coverage for https://github.com/Expensify/App/issues/97796 — Per Diem time picker in a non-English
+    // locale. IntlStore installs a process-wide date-fns locale (German meridiem is "vorm."/"nachm."), but the picker's
+    // internal 12-hour strings always use the fixed English CONST.TIME_PERIOD tokens. These assertions fail on `main`
+    // (parse of "02:00 PM" under German returns Invalid Date, so the time collapses to '') and pass after the fix.
+    describe('Per Diem time picker under a non-English locale (issue #97796)', () => {
+        const DATE = '2023-11-14';
+        const AFTERNOON = '2023-11-14 14:00:00';
+
+        afterEach(async () => {
+            // Restore English so later suites are unaffected by the German default locale.
+            await IntlStore.load(CONST.LOCALES.EN);
+        });
+
+        it('parses the picker output regardless of the display locale', async () => {
+            await IntlStore.load(CONST.LOCALES.DE);
+            expect(DateUtils.combineDateAndTime('08:00 AM', DATE)).toBe('2023-11-14 08:00:00');
+            expect(DateUtils.combineDateAndTime('02:00 PM', DATE)).toBe('2023-11-14 14:00:00');
+        });
+
+        it('handles the noon/midnight boundaries in German', async () => {
+            await IntlStore.load(CONST.LOCALES.DE);
+            expect(DateUtils.combineDateAndTime('12:00 AM', DATE)).toBe('2023-11-14 00:00:00');
+            expect(DateUtils.combineDateAndTime('12:00 PM', DATE)).toBe('2023-11-14 12:00:00');
+        });
+
+        it('seeds the picker period with a fixed CONST.TIME_PERIOD token so the AM/PM highlight matches', async () => {
+            await IntlStore.load(CONST.LOCALES.DE);
+            // This is exactly what TimePicker does: format the value for display, then read the period back.
+            const localized = DateUtils.extractTime12Hour(AFTERNOON);
+            expect(DateUtils.get12HourTimeObjectFromDate(localized).period).toBe(CONST.TIME_PERIOD.PM);
+        });
+
+        it('keeps the on-screen time localized (display is not regressed)', async () => {
+            await IntlStore.load(CONST.LOCALES.DE);
+            expect(DateUtils.extractTime12Hour(AFTERNOON)).toBe('02:00 nachm.');
+        });
+
+        it('accepts a valid start/end range built from picker values in German', async () => {
+            await IntlStore.load(CONST.LOCALES.DE);
+            const startTime = DateUtils.combineDateAndTime('08:00 AM', DATE);
+            const endTime = DateUtils.combineDateAndTime('02:00 PM', DATE);
+            expect(DateUtils.isValidStartEndTimeRange({startTime, endTime})).toBe(true);
+        });
+
+        it('falls back instead of throwing when the time cannot be parsed', async () => {
+            await IntlStore.load(CONST.LOCALES.DE);
+            expect(() => DateUtils.get12HourTimeObjectFromDate('not a time')).not.toThrow();
+            expect(DateUtils.get12HourTimeObjectFromDate('not a time').period).toBe(CONST.TIME_PERIOD.PM);
+        });
+    });
 });

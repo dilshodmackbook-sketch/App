@@ -561,9 +561,14 @@ const combineDateAndTime = (updatedTime: string, inputDateTime: string): string 
             parsedTime = tempTime;
         }
     } else if (updatedTime.includes(':')) {
-        // it's in "hh:mm a" format
-        const tempTime = parse(updatedTime, 'hh:mm a', new Date());
+        // It's in "hh:mm a" format. The day period is always one of the fixed CONST.TIME_PERIOD tokens the time picker
+        // emits, so we resolve it against those constants instead of parsing the locale-sensitive `a` token, which fails
+        // under non-English date-fns locales (e.g. German expects "vorm."/"nachm." and rejects "AM"/"PM").
+        const [clockPart, period] = updatedTime.split(' ');
+        const tempTime = parse(clockPart, 'hh:mm', new Date());
         if (isValid(tempTime)) {
+            const hours12 = tempTime.getHours() % 12;
+            tempTime.setHours(period === CONST.TIME_PERIOD.PM ? hours12 + 12 : hours12);
             parsedTime = tempTime;
         }
     }
@@ -615,12 +620,23 @@ function get12HourTimeObjectFromDate(dateTime: string, isFullFormat = false): {h
         };
     }
     const parsedTime = parse(dateTime, isFullFormat ? 'hh:mm:ss.SSS a' : 'hh:mm a', new Date());
+    if (!isValid(parsedTime)) {
+        return {
+            hour: '12',
+            minute: '00',
+            seconds: '00',
+            milliseconds: '000',
+            period: CONST.TIME_PERIOD.PM,
+        };
+    }
     return {
         hour: format(parsedTime, 'hh'),
         minute: format(parsedTime, 'mm'),
         seconds: isFullFormat ? format(parsedTime, 'ss') : '00',
         milliseconds: isFullFormat ? format(parsedTime, 'SSS') : '000',
-        period: format(parsedTime, 'a').toUpperCase(),
+        // Derive the period numerically so it is always a fixed CONST.TIME_PERIOD token, never a localized meridiem
+        // like "NACHM." that the AM/PM button-highlight comparison (getStatusAMandPMButtonStyle) can't match.
+        period: parsedTime.getHours() >= 12 ? CONST.TIME_PERIOD.PM : CONST.TIME_PERIOD.AM,
     };
 }
 
