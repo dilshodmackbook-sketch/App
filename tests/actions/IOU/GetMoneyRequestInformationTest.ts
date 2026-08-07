@@ -11,6 +11,10 @@ import waitForBatchedUpdates from '../../utils/waitForBatchedUpdates';
 jest.mock('@src/libs/Navigation/Navigation', () => ({
     navigate: jest.fn(),
     goBack: jest.fn(),
+    navigationRef: {
+        getCurrentRoute: jest.fn(() => ({name: 'Money_Request_Create', params: {}})),
+        getState: jest.fn(() => ({})),
+    },
 }));
 
 const POLICY_ID = 'policy-test-1';
@@ -213,6 +217,81 @@ describe('getMoneyRequestInformation', () => {
 
             expect(tagEntry).toBeDefined();
             expect(tagEntry?.value).toEqual({[TAG_LIST]: [TAG_NAME]});
+        });
+    });
+
+    describe('reusing an outstanding report after a partial approval', () => {
+        const APPROVER_ACCOUNT_ID = 300;
+        const APPROVED_REPORT_ID = 'report-approved-1';
+        const HELD_REPORT_ID = 'report-held-1';
+
+        beforeEach(async () => {
+            // Session must be the submitter so `canAddTransaction` (isCurrentUserSubmitter) passes for the held report.
+            await Onyx.set(ONYXKEYS.SESSION, {accountID: PAYEE_ACCOUNT_ID, email: 'payee@example.com'});
+            await Onyx.set(ONYXKEYS.PERSONAL_DETAILS_LIST, {
+                [PAYEE_ACCOUNT_ID]: {accountID: PAYEE_ACCOUNT_ID, login: 'payee@example.com'},
+                [APPROVER_ACCOUNT_ID]: {accountID: APPROVER_ACCOUNT_ID, login: 'approver@example.com'},
+            });
+            await Onyx.set(`${ONYXKEYS.COLLECTION.POLICY}${POLICY_ID}`, {
+                id: POLICY_ID,
+                type: CONST.POLICY.TYPE.CORPORATE,
+                name: 'Test Policy',
+                approvalMode: CONST.POLICY.APPROVAL_MODE.BASIC,
+                approver: 'approver@example.com',
+                owner: 'approver@example.com',
+                role: CONST.POLICY.ROLE.USER,
+            });
+            // The report the chat still points to on the submitter's client: the just-approved report, which is NOT addable.
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${APPROVED_REPORT_ID}`, {
+                reportID: APPROVED_REPORT_ID,
+                policyID: POLICY_ID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                ownerAccountID: PAYEE_ACCOUNT_ID,
+                managerID: APPROVER_ACCOUNT_ID,
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+                currency: 'USD',
+                total: 0,
+            });
+            // The still-outstanding report holding the on-hold expense; PROCESSING and awaiting first-level approval → addable.
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${HELD_REPORT_ID}`, {
+                reportID: HELD_REPORT_ID,
+                policyID: POLICY_ID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                ownerAccountID: PAYEE_ACCOUNT_ID,
+                managerID: APPROVER_ACCOUNT_ID,
+                stateNum: CONST.REPORT.STATE_NUM.SUBMITTED,
+                statusNum: CONST.REPORT.STATUS_NUM.SUBMITTED,
+                currency: 'USD',
+                total: 0,
+            });
+            await waitForBatchedUpdates();
+        });
+
+        it('reuses the outstanding held report instead of creating a brand-new one when the chat pointer is stale', () => {
+            const result = getMoneyRequestInformation({
+                ...baseParams,
+                // On the submitter's client the chat still points at the approved report (the approve-flow repoint only ran on the approver's client).
+                parentChatReport: {...parentChatReport, iouReportID: APPROVED_REPORT_ID},
+            });
+
+            expect(result.iouReport.reportID).toBe(HELD_REPORT_ID);
+        });
+
+        it('still creates a new report when there is no outstanding report to reuse', async () => {
+            await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${HELD_REPORT_ID}`, {
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+            });
+            await waitForBatchedUpdates();
+
+            const result = getMoneyRequestInformation({
+                ...baseParams,
+                parentChatReport: {...parentChatReport, iouReportID: APPROVED_REPORT_ID},
+            });
+
+            expect(result.iouReport.reportID).not.toBe(HELD_REPORT_ID);
+            expect(result.iouReport.reportID).not.toBe(APPROVED_REPORT_ID);
         });
     });
 

@@ -85,7 +85,11 @@ function ReportField({selectedParticipants, iouType, reportID, reportActionID, a
         localeCompare(a?.reportName?.toLowerCase() ?? '', b?.reportName?.toLowerCase() ?? ''),
     );
 
-    const outstandingReportID = isPolicyExpenseChat ? (iouReportIDFromMain ?? availableOutstandingReports.at(0)?.reportID) : reportID;
+    // Only trust the chat's `iouReportID` pointer when it still resolves to an outstanding report. After a partial
+    // approval it can point at the just-approved report on the submitter's client, so fall back to the newest
+    // outstanding report — matching where `getMoneyRequestInformation` actually attaches the expense.
+    const isIOUReportFromMainOutstanding = !!iouReport && isReportOutstanding(iouReport, policyID, reportNameValuePairs, false);
+    const outstandingReportID = isPolicyExpenseChat ? ((isIOUReportFromMainOutstanding ? iouReportIDFromMain : undefined) ?? availableOutstandingReports.at(0)?.reportID) : reportID;
 
     const [selectedReportID, selectedReport] = (() => {
         const reportIDToUse = shouldUseTransactionReport ? transactionReportID : outstandingReportID;

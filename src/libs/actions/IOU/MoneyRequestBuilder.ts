@@ -19,10 +19,12 @@ import {
     buildOptimisticIOUReportAction,
     buildOptimisticMoneyRequestEntities,
     buildOptimisticReportPreview,
+    canAddTransaction,
     computeOptimisticReportNameWithMetadata,
     generateReportID,
     getChatByParticipants,
     getOutstandingChildRequest,
+    getOutstandingReportsForUser,
     getReimbursableTotal,
     getReportTransactions,
     getUnheldReimbursableTotal,
@@ -1362,6 +1364,22 @@ function getMoneyRequestInformation(moneyRequestInformation: MoneyRequestInforma
         iouReport = allReports?.[`${ONYXKEYS.COLLECTION.REPORT}${moneyRequestReportID}`] ?? null;
     } else if (!allReports?.[`${ONYXKEYS.COLLECTION.REPORT}${chatReport.iouReportID}`]?.errorFields?.createChat) {
         iouReport = allReports?.[`${ONYXKEYS.COLLECTION.REPORT}${chatReport.iouReportID}`] ?? null;
+    }
+
+    // After a partial approval ("approve only the unheld expense"), the held expense is split into a still-outstanding
+    // report and the chat is repointed at it only optimistically on the approver's client. On the submitter's client
+    // `chatReport.iouReportID` still resolves to the now-approved report (or nothing), so the reuse gate fails and a
+    // brand-new report would be spawned. Fall back to the submitter's newest outstanding report on this policy — the
+    // same source the confirmation page's Report field already uses — so the new expense joins the held report.
+    if (isPolicyExpenseChat && !existingIOUReport && !moneyRequestReportID && (!iouReport || !canAddTransaction(iouReport))) {
+        const outstandingReport = getOutstandingReportsForUser(chatReport.policyID, payeeAccountID)
+            .filter((report): report is OnyxTypes.Report => !!report && canAddTransaction(report))
+            // `created` is an ISO timestamp, so a lexicographic compare keeps the newest report first.
+            .sort((reportA, reportB) => ((reportB.created ?? '') < (reportA.created ?? '') ? -1 : 1))
+            .at(0);
+        if (outstandingReport) {
+            iouReport = outstandingReport;
+        }
     }
 
     const isScanRequest = isScanRequestTransactionUtils(existingTransaction);
