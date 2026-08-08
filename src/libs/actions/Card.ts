@@ -1569,32 +1569,47 @@ type ContinuousReconciliationUpdate = OnyxUpdate<
     | typeof ONYXKEYS.COLLECTION.EXPENSIFY_CARD_CONTINUOUS_RECONCILIATION_CONNECTION
 >;
 
-function toggleContinuousReconciliation(workspaceAccountID: number, shouldUseContinuousReconciliation: boolean, connectionName: ConnectionName, oldConnectionName?: ConnectionName) {
+/**
+ * Enables/disables Continuous Reconciliation.
+ *
+ * `policyAccountID` is the workspace's `policy.policyAccountID` and is the identifier the
+ * `TOGGLE_CARD_CONTINUOUS_RECONCILIATION` command expects (its request field is named `policyAccountID`).
+ * `domainFundID` is the domain-scoped fund ID that the reconciliation Onyx keys are stored under.
+ * On single-feed workspaces the two are the same number; on domain-linked feeds they differ, and
+ * conflating them is what made the toggle revert (wrong `policyAccountID` sent) for those customers.
+ */
+function toggleContinuousReconciliation(
+    policyAccountID: number,
+    domainFundID: number,
+    shouldUseContinuousReconciliation: boolean,
+    connectionName: ConnectionName,
+    oldConnectionName?: ConnectionName,
+) {
     const parameters = shouldUseContinuousReconciliation
         ? {
-              policyAccountID: workspaceAccountID,
+              policyAccountID,
               shouldUseContinuousReconciliation,
               expensifyCardContinuousReconciliationConnection: connectionName,
           }
         : {
-              policyAccountID: workspaceAccountID,
+              policyAccountID,
               shouldUseContinuousReconciliation,
           };
 
     const optimisticData: ContinuousReconciliationUpdate[] = [
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION}${domainFundID}`,
             value: shouldUseContinuousReconciliation,
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION_PENDING_ACTION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION_PENDING_ACTION}${domainFundID}`,
             value: CONST.RED_BRICK_ROAD_PENDING_ACTION.UPDATE,
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_CONTINUOUS_RECONCILIATION_CONNECTION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_CONTINUOUS_RECONCILIATION_CONNECTION}${domainFundID}`,
             value: connectionName,
         },
     ];
@@ -1602,17 +1617,17 @@ function toggleContinuousReconciliation(workspaceAccountID: number, shouldUseCon
     const successData: ContinuousReconciliationUpdate[] = [
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION}${domainFundID}`,
             value: shouldUseContinuousReconciliation,
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION_PENDING_ACTION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION_PENDING_ACTION}${domainFundID}`,
             value: null,
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_CONTINUOUS_RECONCILIATION_CONNECTION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_CONTINUOUS_RECONCILIATION_CONNECTION}${domainFundID}`,
             value: connectionName,
         },
     ];
@@ -1620,17 +1635,17 @@ function toggleContinuousReconciliation(workspaceAccountID: number, shouldUseCon
     const failureData: ContinuousReconciliationUpdate[] = [
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION}${domainFundID}`,
             value: !shouldUseContinuousReconciliation,
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION_PENDING_ACTION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION_PENDING_ACTION}${domainFundID}`,
             value: null,
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_CONTINUOUS_RECONCILIATION_CONNECTION}${workspaceAccountID}`,
+            key: `${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_CONTINUOUS_RECONCILIATION_CONNECTION}${domainFundID}`,
             value: oldConnectionName ?? null,
         },
     ];

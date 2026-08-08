@@ -79,7 +79,11 @@ function CardReconciliationPage({policy, route}: CardReconciliationPageProps) {
         }, initialValue);
     }, [allCardSettings, policy]);
 
+    // `effectiveDomainID` is the domain-scoped fund ID the reconciliation Onyx state is stored under (shared with the settlement page),
+    // while `workspaceAccountID` is the `policy.policyAccountID` the toggle command expects as its request identifier. On single-feed
+    // workspaces they are the same number; on domain-linked feeds they differ, which is what this fix keeps distinct.
     const effectiveDomainID = useDefaultFundID(policyID);
+    const workspaceAccountID = policy?.policyAccountID ?? CONST.DEFAULT_NUMBER_ID;
 
     const [continuousReconciliation] = useOnyx(`${ONYXKEYS.COLLECTION.EXPENSIFY_CARD_USE_CONTINUOUS_RECONCILIATION}${effectiveDomainID}`, {
         selector: isExpensifyCardContinuousReconciliationEnabledSelector,
@@ -100,7 +104,7 @@ function CardReconciliationPage({policy, route}: CardReconciliationPageProps) {
     const bankAccountTitle = connectionBankAccounts.find((account) => account.id === reconciliationBankAccountID)?.name ?? '';
 
     const handleToggleContinuousReconciliation = (value: boolean) => {
-        toggleContinuousReconciliation(effectiveDomainID, value, connectionName, currentConnectionName);
+        toggleContinuousReconciliation(workspaceAccountID, effectiveDomainID, value, connectionName, currentConnectionName);
         if (value) {
             Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.WORKSPACE_ACCOUNTING_RECONCILIATION_ACCOUNT_SETTINGS.path));
         }
