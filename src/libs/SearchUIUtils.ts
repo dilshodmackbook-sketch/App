@@ -179,6 +179,7 @@ import {
     isOpenExpenseReport,
     isOpenReport,
     isProcessingReport,
+    isRejectedReport,
     isSettled,
     shouldReportShowSubscript,
 } from './ReportUtils';
@@ -3078,10 +3079,7 @@ function getReportSections({
                 const reportIsArchived = isArchivedReport(getReportNameValuePairsFromKey(data, reportItem));
                 const avatarProps = getSearchReportAvatarProps(reportItem, formatPhoneNumber, translate, mergedPersonalDetails, policy, reportIsArchived);
 
-                const isRejectedReport =
-                    reportItem.stateNum === CONST.REPORT.STATE_NUM.OPEN &&
-                    reportItem.ownerAccountID === currentAccountID &&
-                    reportItem.nextStep?.messageKey === CONST.NEXT_STEP.MESSAGE_KEY.REJECTED_REPORT;
+                const isReportRejected = isRejectedReport(reportItem, currentAccountID);
                 const shouldHidePayAsPrimaryAction = hasOnlyNonReimbursableTransactions(reportItem.reportID, allReportTransactions);
                 const primaryActionExclusions: SearchTransactionAction[] = [
                     ...(shouldHidePayAsPrimaryAction ? [CONST.SEARCH.ACTION_TYPES.PAY] : []),
@@ -3115,7 +3113,7 @@ function getReportSections({
                     shouldShowYearApproved: shouldShowYearApprovedReport,
                     shouldShowYearExported: shouldShowYearExportedReport,
                     hasVisibleViolations: hasVisibleViolationsForReport,
-                    isRejectedReport,
+                    isRejectedReport: isReportRejected,
                     totalDisplaySpend,
                     nonReimbursableSpend,
                     reimbursableSpend,

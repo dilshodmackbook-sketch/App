@@ -2009,6 +2009,20 @@ function isOpenReport(report: OnyxEntry<Report>): boolean {
     return report?.stateNum === CONST.REPORT.STATE_NUM.OPEN && report?.statusNum === CONST.REPORT.STATUS_NUM.OPEN;
 }
 
+/**
+ * Whether the report was rejected back to its submitter at the report level (More → Reject).
+ * A report-level rejection returns the report to OPEN and sets the REJECTED_REPORT next step, and the message is
+ * addressed to the submitter, so it is gated on the current user owning the report — matching what the Spend page shows.
+ */
+// TODO: currentUserAccountID will be required eventually so this becomes a pure function. Subscribe the data via useOnyx and pass it from the component. Refactor issue: https://github.com/Expensify/App/issues/66412
+function isRejectedReport(report: OnyxEntry<Report>, currentUserAccountID?: number): boolean {
+    return (
+        report?.stateNum === CONST.REPORT.STATE_NUM.OPEN &&
+        report?.ownerAccountID === (currentUserAccountID ?? deprecatedCurrentUserAccountID) &&
+        report?.nextStep?.messageKey === CONST.NEXT_STEP.MESSAGE_KEY.REJECTED_REPORT
+    );
+}
+
 function isOpenOrProcessingReport(report: OnyxEntry<Report>): boolean {
     return isOpenReport(report) || isProcessingReport(report);
 }
@@ -14192,6 +14206,7 @@ export {
     isPolicyExpenseChat,
     isProcessingReport,
     isOpenReport,
+    isRejectedReport,
     isReportIDApproved,
     isAwaitingFirstLevelApproval,
     isPublicRoom,

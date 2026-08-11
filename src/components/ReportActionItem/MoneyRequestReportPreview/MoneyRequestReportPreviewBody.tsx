@@ -1,8 +1,10 @@
 import {getButtonRole} from '@components/Button/utils';
+import DotIndicatorMessage from '@components/DotIndicatorMessage';
 import OfflineWithFeedback from '@components/OfflineWithFeedback';
 import PressableWithoutFeedback from '@components/Pressable/PressableWithoutFeedback';
 import {showContextMenuForReport, useShowContextMenuActions, useShowContextMenuState} from '@components/ShowContextMenuContext';
 
+import useCurrentUserPersonalDetails from '@hooks/useCurrentUserPersonalDetails';
 import useLocalize from '@hooks/useLocalize';
 import useResponsiveLayout from '@hooks/useResponsiveLayout';
 import useStyleUtils from '@hooks/useStyleUtils';
@@ -12,6 +14,7 @@ import useThemeStyles from '@hooks/useThemeStyles';
 import ControlSelection from '@libs/ControlSelection';
 import {canUseTouchScreen} from '@libs/DeviceCapabilities';
 import type {ForwardedFSClassProps} from '@libs/Fullstory/types';
+import {isRejectedReport} from '@libs/ReportUtils';
 
 import variables from '@styles/variables';
 
@@ -77,8 +80,11 @@ function MoneyRequestReportPreviewBody({
 
     const {action, iouReport, chatReportID} = useReportPreviewData();
     const {isTransitionPending, isScanning, reportPreviewStyles} = useReportPreviewUIState();
+    const currentUserPersonalDetails = useCurrentUserPersonalDetails();
 
     const isReportDeleted = action?.pendingAction === CONST.RED_BRICK_ROAD_PENDING_ACTION.DELETE;
+    // Report-level rejection (More → Reject) keeps the report at report level, so surface it here the same way the Spend page does
+    const shouldShowRejectedReportMessage = isRejectedReport(iouReport, currentUserPersonalDetails?.accountID);
     const totalAmountStyle = shouldUseNarrowLayout ? [styles.flexColumnReverse, styles.alignItemsStretch] : [styles.flexRow, styles.alignItemsCenter];
 
     return (
@@ -133,6 +139,12 @@ function MoneyRequestReportPreviewBody({
                                 <View style={[reportPreviewStyles.contentContainerStyle, styles.gap4]}>
                                     <ReportPreviewHeader />
                                     <TransactionReportCarousel />
+                                    {shouldShowRejectedReportMessage && (
+                                        <DotIndicatorMessage
+                                            type="error"
+                                            messages={{rejectedReport: translate('iou.rejectReport.rejectedReportMessage')}}
+                                        />
+                                    )}
                                     <View style={[styles.expenseAndReportPreviewTextContainer]}>
                                         <View style={[totalAmountStyle, styles.justifyContentBetween, styles.gap4, StyleUtils.getMinimumHeight(variables.h28)]}>
                                             <ReportPreviewActionButton />
