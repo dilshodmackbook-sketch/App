@@ -71,7 +71,14 @@ function BookTravelButton({
     const isUserValidated = account?.validated ?? false;
     const primaryLogin = account?.primaryLogin ?? '';
 
-    const policy = usePolicy(activePolicyID);
+    const [defaultPolicyID] = useOnyx(ONYXKEYS.NVP_ACTIVE_POLICY_ID);
+    const propPolicy = usePolicy(activePolicyID);
+    // `activePolicyID` is the snapshot the caller froze when the Travel screen opened. If it does not resolve to a
+    // paid group workspace (e.g. the pre-upgrade personal policy left behind after an in-flow upgrade), fall back to
+    // the user's current default workspace — which the live `groupPaidPolicies` check below already guarantees exists
+    // as a paid group policy.
+    const bookingPolicyID = isPaidGroupPolicy(propPolicy) ? activePolicyID : (defaultPolicyID ?? activePolicyID);
+    const policy = usePolicy(bookingPolicyID);
     const [errorMessage, setErrorMessage] = useState<string | ReactElement>('');
     const [travelSettings] = useOnyx(ONYXKEYS.NVP_TRAVEL_SETTINGS);
     const [sessionEmail] = useOnyx(ONYXKEYS.SESSION, {selector: emailSelector});
@@ -88,7 +95,7 @@ function BookTravelButton({
     const shouldResumeBookingRef = useRef(false);
 
     const navigateToPublicDomainError = () => {
-        const dynamicSuffix = hasPolicyIDInActiveRoute() ? DYNAMIC_ROUTES.TRAVEL_PUBLIC_DOMAIN_ERROR.path : DYNAMIC_ROUTES.TRAVEL_PUBLIC_DOMAIN_ERROR.getRoute(activePolicyID);
+        const dynamicSuffix = hasPolicyIDInActiveRoute() ? DYNAMIC_ROUTES.TRAVEL_PUBLIC_DOMAIN_ERROR.path : DYNAMIC_ROUTES.TRAVEL_PUBLIC_DOMAIN_ERROR.getRoute(bookingPolicyID);
         Navigation.navigate(createDynamicRoute(dynamicSuffix));
     };
 
@@ -167,7 +174,7 @@ function BookTravelButton({
         // Legacy request-access path for not-yet-provisioned workspaces when the self-serve provisioning beta is off.
         if (!isPolicyProvisioned && !isBetaEnabled(CONST.BETAS.IS_TRAVEL_VERIFIED)) {
             if (!isUserValidated) {
-                Navigation.navigate(ROUTES.TRAVEL_VERIFY_ACCOUNT.getRoute(undefined, activePolicyID, Navigation.getActiveRoute()));
+                Navigation.navigate(ROUTES.TRAVEL_VERIFY_ACCOUNT.getRoute(undefined, bookingPolicyID, Navigation.getActiveRoute()));
                 return;
             }
             if (shouldShowVerifyAccountModal) {
@@ -191,14 +198,14 @@ function BookTravelButton({
 
         // Hand off to the enablement stepper, which computes and collects only the steps this workspace still needs.
         cleanupTravelProvisioningSession();
-        const enableTravelRoute = ROUTES.TRAVEL_ENABLE.getRoute(activePolicyID ?? String(CONST.DEFAULT_NUMBER_ID));
+        const enableTravelRoute = ROUTES.TRAVEL_ENABLE.getRoute(bookingPolicyID ?? String(CONST.DEFAULT_NUMBER_ID));
         // EnableTravel's own entry-mount effect would catch this and redirect regardless (it also has to, to
         // protect a direct/deep link straight into the stepper), but checking here too avoids a visible URL
         // blink: without this, the button would navigate to the stepper's URL first, then immediately get
         // replaced with the verify URL a render later.
         if (!isUserValidated) {
             setTravelProvisioningNextStep(enableTravelRoute);
-            Navigation.navigate(ROUTES.TRAVEL_VERIFY_ACCOUNT.getRoute(undefined, activePolicyID, Navigation.getActiveRoute()));
+            Navigation.navigate(ROUTES.TRAVEL_VERIFY_ACCOUNT.getRoute(undefined, bookingPolicyID, Navigation.getActiveRoute()));
             return;
         }
         Navigation.navigate(enableTravelRoute);
@@ -230,7 +237,7 @@ function BookTravelButton({
                 onPress={bookATrip}
                 accessibilityLabel={translate('travel.bookTravel')}
                 style={large ? styles.w100 : undefined}
-                isDisabled={!activePolicyID}
+                isDisabled={!bookingPolicyID}
                 success
                 large={large}
                 sentryLabel={sentryLabel}
