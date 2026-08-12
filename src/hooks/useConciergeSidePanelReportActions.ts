@@ -2,6 +2,7 @@ import DateUtils from '@libs/DateUtils';
 import {isCreatedAction, isCurrentUserPendingAddAction} from '@libs/ReportActionsUtils';
 import {buildConciergeGreetingReportAction} from '@libs/ReportUtils';
 
+import CONST from '@src/CONST';
 import type * as OnyxTypes from '@src/types/onyx';
 
 import type {OnyxEntry} from 'react-native-onyx';
@@ -144,7 +145,12 @@ function useConciergeSidePanelReportActions({
                 return false;
             }
             if (isConciergeMainDM) {
-                return isCreatedAction(action) || isCurrentUserPendingAddAction(action, currentUserAccountID) || action.created >= sessionStartTime;
+                // Keep an OPEN (incomplete) child task visible even when it predates the session, so a pending
+                // task is never hidden behind "Show history" (the goal of 3b8d6040f65) without forcing the whole
+                // history open and suppressing the button (the #97187 regression of that blanket approach).
+                const isOpenChildTask =
+                    action.childType === CONST.REPORT.TYPE.TASK && action.childStateNum === CONST.REPORT.STATE_NUM.OPEN && action.childStatusNum === CONST.REPORT.STATUS_NUM.OPEN;
+                return isCreatedAction(action) || isCurrentUserPendingAddAction(action, currentUserAccountID) || isOpenChildTask || action.created >= sessionStartTime;
             }
             if (!firstUserMessageCreated) {
                 return false;
