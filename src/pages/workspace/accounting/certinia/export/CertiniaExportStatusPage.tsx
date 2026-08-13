@@ -31,7 +31,7 @@ function CertiniaExportStatusPage({policy}: WithPolicyConnectionsProps) {
     const {config} = policy?.connections?.financialforce ?? {};
     const exportConfig = config?.export;
     const selectedExportStatus = exportConfig?.exportStatus;
-    const normalizedSelectedExportStatus = getCertiniaFFAExportStatusValue(selectedExportStatus);
+    const normalizedSelectedExportStatus = getCertiniaFFAExportStatusValue(selectedExportStatus) ?? CONST.CERTINIA_EXPORT_STATUS.COMPLETE;
     const backPath = useDynamicBackPath(DYNAMIC_ROUTES.POLICY_ACCOUNTING_CERTINIA_EXPORT_STATUS.path);
 
     const data: ExportStatusListItem[] = CERTINIA_FFA_EXPORT_STATUSES.map((status) => ({

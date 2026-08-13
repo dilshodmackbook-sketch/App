@@ -5,6 +5,7 @@ import OfflineWithFeedback from '@components/OfflineWithFeedback';
 import useLocalize from '@hooks/useLocalize';
 import useThemeStyles from '@hooks/useThemeStyles';
 
+import {updateFinancialForceExportStatus} from '@libs/actions/connections/FinancialForce';
 import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import {areSettingsInErrorFields, settingsPendingAction} from '@libs/PolicyUtils';
@@ -16,7 +17,7 @@ import withPolicyConnections from '@pages/workspace/withPolicyConnections';
 import CONST from '@src/CONST';
 import ROUTES, {DYNAMIC_ROUTES} from '@src/ROUTES';
 
-import React from 'react';
+import React, {useEffect} from 'react';
 
 type ExportRow = {
     description: string;
@@ -38,9 +39,19 @@ function CertiniaExportPage({policy}: WithPolicyConnectionsProps) {
     const exportPath = policyID ? `${ROUTES.POLICY_ACCOUNTING.getRoute(policyID)}/${DYNAMIC_ROUTES.POLICY_ACCOUNTING_CERTINIA_EXPORT.path}` : undefined;
     const selectedVendor = data?.vendors?.find((vendor) => vendor.id === exportConfig?.vendorAccount);
     const exportStatus = exportConfig?.exportStatus;
-    const normalizedFFAExportStatus = getCertiniaFFAExportStatusValue(exportStatus);
+    const normalizedFFAExportStatus = getCertiniaFFAExportStatusValue(exportStatus) ?? CONST.CERTINIA_EXPORT_STATUS.COMPLETE;
     const normalizedReportExportStatus = getCertiniaReportExportStatusValue(exportStatus);
     const exportDate = Object.values(CONST.CERTINIA_EXPORT_DATE).find((value) => value === exportConfig?.exportDate);
+
+    // A freshly set-up FFA connection carries the PSA default export status ("Approved"), which Certinia rejects for
+    // payable invoices and causes the export to fail. Persist a valid FFA status so subsequent exports succeed.
+    // The write makes the stored value valid, so this effect does not re-fire.
+    useEffect(() => {
+        if (!policyID || hasPSA || getCertiniaFFAExportStatusValue(exportStatus)) {
+            return;
+        }
+        updateFinancialForceExportStatus(policyID, CONST.CERTINIA_EXPORT_STATUS.COMPLETE, exportStatus ?? null);
+    }, [policyID, hasPSA, exportStatus]);
 
     const preferredExporterRow: ExportRow = {
         description: translate('workspace.accounting.preferredExporter'),
