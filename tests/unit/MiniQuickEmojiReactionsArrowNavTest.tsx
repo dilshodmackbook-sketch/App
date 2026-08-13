@@ -98,4 +98,22 @@ describe('MiniQuickEmojiReactions arrow-key navigation', () => {
         expect(keys).toContain(ARROW_LEFT);
         expect(keys).toContain(ARROW_RIGHT);
     });
+
+    it('does NOT subscribe arrow handlers when a reaction is focused via a mouse click', async () => {
+        renderToolbar();
+        await waitForBatchedUpdatesWithAct();
+
+        // A real mouse click dispatches pointerdown inside the row before the button receives focus. Arrow keys must
+        // stay unsubscribed so clicking a reaction reacts without arming arrow navigation across the row.
+        const [firstButton] = screen.getAllByRole(CONST.ROLE.BUTTON);
+        expect(firstButton).toBeDefined();
+        // A real mouse click dispatches pointerdown (captured on the document) right before the button is focused.
+        document.dispatchEvent(new Event('pointerdown'));
+        fireEvent(firstButton, 'focus');
+        await waitForBatchedUpdatesWithAct();
+
+        const keys = subscribedShortcutKeys();
+        expect(keys).not.toContain(ARROW_LEFT);
+        expect(keys).not.toContain(ARROW_RIGHT);
+    });
 });

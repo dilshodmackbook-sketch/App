@@ -117,25 +117,60 @@ function MiniQuickEmojiReactions({reportAction, reportActionID, onEmojiSelected,
         isActive: isRowFocused,
     });
 
-    // Focus entering the row is handled per-button via onFocus. Here we only need to detect focus leaving the
-    // row entirely (Tab/Shift+Tab out), so we can turn arrow capturing back off and stop owning the arrow keys.
+    // Clicking a reaction with the mouse also focuses its button, but arrow keys should only take over the row
+    // when focus arrived via the keyboard (Tab) — a mouse click must not start arrow navigation. We track the last
+    // interaction, mirroring the keyboard-vs-pointer distinction EmojiPickerMenu keeps with `isUsingKeyboardMovement`:
+    // keyboard input arms it, pointer input disarms it.
+    const isKeyboardInteractionRef = useRef(true);
+
+    // This is a web-only mini toolbar; bail out where there is no DOM (native) and nothing to listen to.
     useEffect(() => {
-        const node = containerRef.current;
-        if (!(node instanceof HTMLElement)) {
+        if (typeof document === 'undefined') {
             return;
         }
+        // A pointer press means the following focus is a mouse click, not keyboard navigation. Both interaction
+        // listeners live on the document (capture) because the interaction that moves focus into the row (a click
+        // on the button, or the Tab dispatched on the element outside it) originates outside the container node.
+        const handlePointerDown = () => {
+            isKeyboardInteractionRef.current = false;
+        };
+        // Tab/arrow keys mean the user is navigating via the keyboard, so re-arm arrow capturing.
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Tab' && !event.key.startsWith('Arrow')) {
+                return;
+            }
+            isKeyboardInteractionRef.current = true;
+        };
+        document.addEventListener('pointerdown', handlePointerDown, true);
+        document.addEventListener('keydown', handleKeyDown, true);
+
+        // Focus entering the row is handled per-button via onFocus. Here we only need to detect focus leaving the
+        // row entirely (Tab/Shift+Tab out), so we can turn arrow capturing back off and stop owning the arrow keys.
+        const node = containerRef.current;
         const handleFocusOut = (event: FocusEvent) => {
-            if (event.relatedTarget instanceof Node && node.contains(event.relatedTarget)) {
+            if (event.relatedTarget instanceof Node && node instanceof HTMLElement && node.contains(event.relatedTarget)) {
                 return;
             }
             setIsRowFocused(false);
         };
-        node.addEventListener('focusout', handleFocusOut);
-        return () => node.removeEventListener('focusout', handleFocusOut);
+        if (node instanceof HTMLElement) {
+            node.addEventListener('focusout', handleFocusOut);
+        }
+        return () => {
+            document.removeEventListener('pointerdown', handlePointerDown, true);
+            document.removeEventListener('keydown', handleKeyDown, true);
+            if (node instanceof HTMLElement) {
+                node.removeEventListener('focusout', handleFocusOut);
+            }
+        };
     }, []);
 
     const handleButtonFocus = useCallback(
         (index: number) => {
+            // Ignore focus that came from a mouse click so arrows don't hijack the row after a pointer reaction.
+            if (!isKeyboardInteractionRef.current) {
+                return;
+            }
             setIsRowFocused(true);
             setFocusedIndex(index);
         },
