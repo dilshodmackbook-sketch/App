@@ -15710,6 +15710,223 @@ describe('ReportUtils', () => {
 
             await Onyx.clear();
         });
+
+        it('should return null for a processing report when the only branch-tripping violation (receiptNotSmartScanned) is hidden for the submitter', async () => {
+            await Onyx.clear();
+
+            const policyID = 'policy-rbr-hidden-notice-processing';
+            const chatReportID = 'chat-rbr-hidden-notice-processing';
+            const expenseReportID = 'expense-rbr-hidden-notice-processing';
+            const modifiedAmountTransactionID = 'transaction-rbr-hidden-notice-modified';
+            const notSmartScannedTransactionID = 'transaction-rbr-hidden-notice-scan';
+
+            const policyData: Policy = {
+                id: policyID,
+                name: 'Hidden Notice Processing Workspace',
+                type: CONST.POLICY.TYPE.TEAM,
+                role: CONST.POLICY.ROLE.ADMIN,
+                outputCurrency: CONST.CURRENCY.USD,
+                reimbursementChoice: CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_YES,
+                approvalMode: CONST.POLICY.APPROVAL_MODE.BASIC,
+                employeeList: {
+                    [currentUserEmail]: {
+                        role: CONST.POLICY.ROLE.ADMIN,
+                    },
+                },
+                owner: currentUserEmail,
+                isPolicyExpenseChatEnabled: true,
+            };
+
+            const chatReport: Report = {
+                ...createPolicyExpenseChat(824),
+                reportID: chatReportID,
+                ownerAccountID: currentUserAccountID,
+                policyID,
+                iouReportID: expenseReportID,
+            };
+
+            const expenseReport: Report = {
+                ...createExpenseReport(825),
+                reportID: expenseReportID,
+                chatReportID,
+                ownerAccountID: currentUserAccountID,
+                managerID: 42,
+                policyID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                currency: CONST.CURRENCY.USD,
+                total: 5000,
+                stateNum: CONST.REPORT.STATE_NUM.SUBMITTED,
+                statusNum: CONST.REPORT.STATUS_NUM.SUBMITTED,
+            };
+
+            const modifiedAmountTransaction: Transaction = {
+                ...createRandomTransaction(824),
+                transactionID: modifiedAmountTransactionID,
+                reportID: expenseReportID,
+                amount: 5000,
+                currency: CONST.CURRENCY.USD,
+                status: CONST.TRANSACTION.STATUS.POSTED,
+                reimbursable: true,
+            };
+
+            const notSmartScannedTransaction: Transaction = {
+                ...createRandomTransaction(825),
+                transactionID: notSmartScannedTransactionID,
+                reportID: expenseReportID,
+                amount: 3000,
+                currency: CONST.CURRENCY.USD,
+                status: CONST.TRANSACTION.STATUS.POSTED,
+                reimbursable: true,
+            };
+
+            const modifiedAmountViolationsKey = `${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${modifiedAmountTransactionID}` as OnyxKey;
+            const notSmartScannedViolationsKey = `${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${notSmartScannedTransactionID}` as OnyxKey;
+            const transactionViolationsCollection: OnyxCollection<TransactionViolation[]> = {
+                // Visible to the submitter, so it satisfies the hasVisibleViolationsForUser gate, but excluded from the LHN on a processing report.
+                [modifiedAmountViolationsKey]: [
+                    {
+                        name: CONST.VIOLATIONS.MODIFIED_AMOUNT,
+                        type: CONST.VIOLATION_TYPES.NOTICE,
+                        showInReview: true,
+                    },
+                ],
+                // Hidden for the submitter (shouldShowViolation returns false), so it must not trip the LHN RBR.
+                [notSmartScannedViolationsKey]: [
+                    {
+                        name: CONST.VIOLATIONS.RECEIPT_NOT_SMART_SCANNED,
+                        type: CONST.VIOLATION_TYPES.NOTICE,
+                        showInReview: true,
+                    },
+                ],
+            };
+
+            await Onyx.merge(ONYXKEYS.SESSION, {accountID: currentUserAccountID, email: currentUserEmail});
+            await waitForBatchedUpdates();
+
+            await Promise.all([
+                Onyx.merge(`${ONYXKEYS.COLLECTION.POLICY}${policyID}`, policyData),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${chatReport.reportID}`, chatReport),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${expenseReport.reportID}`, expenseReport),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${modifiedAmountTransaction.transactionID}`, modifiedAmountTransaction),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${notSmartScannedTransaction.transactionID}`, notSmartScannedTransaction),
+                Onyx.merge(modifiedAmountViolationsKey, transactionViolationsCollection[modifiedAmountViolationsKey]),
+                Onyx.merge(notSmartScannedViolationsKey, transactionViolationsCollection[notSmartScannedViolationsKey]),
+            ]);
+            await waitForBatchedUpdates();
+
+            const result = getViolatingReportIDForRBRInLHN(chatReport, transactionViolationsCollection);
+            expect(result).toBeNull();
+
+            await Onyx.clear();
+        });
+
+        it('should still surface RBR for a processing report when a branch-tripping violation is visible to the submitter', async () => {
+            await Onyx.clear();
+
+            const policyID = 'policy-rbr-visible-notice-processing';
+            const chatReportID = 'chat-rbr-visible-notice-processing';
+            const expenseReportID = 'expense-rbr-visible-notice-processing';
+            const modifiedAmountTransactionID = 'transaction-rbr-visible-notice-modified';
+            const missingCategoryTransactionID = 'transaction-rbr-visible-notice-category';
+
+            const policyData: Policy = {
+                id: policyID,
+                name: 'Visible Notice Processing Workspace',
+                type: CONST.POLICY.TYPE.TEAM,
+                role: CONST.POLICY.ROLE.ADMIN,
+                outputCurrency: CONST.CURRENCY.USD,
+                reimbursementChoice: CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_YES,
+                approvalMode: CONST.POLICY.APPROVAL_MODE.BASIC,
+                employeeList: {
+                    [currentUserEmail]: {
+                        role: CONST.POLICY.ROLE.ADMIN,
+                    },
+                },
+                owner: currentUserEmail,
+                isPolicyExpenseChatEnabled: true,
+            };
+
+            const chatReport: Report = {
+                ...createPolicyExpenseChat(826),
+                reportID: chatReportID,
+                ownerAccountID: currentUserAccountID,
+                policyID,
+                iouReportID: expenseReportID,
+            };
+
+            const expenseReport: Report = {
+                ...createExpenseReport(827),
+                reportID: expenseReportID,
+                chatReportID,
+                ownerAccountID: currentUserAccountID,
+                managerID: 42,
+                policyID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                currency: CONST.CURRENCY.USD,
+                total: 5000,
+                stateNum: CONST.REPORT.STATE_NUM.SUBMITTED,
+                statusNum: CONST.REPORT.STATUS_NUM.SUBMITTED,
+            };
+
+            const modifiedAmountTransaction: Transaction = {
+                ...createRandomTransaction(826),
+                transactionID: modifiedAmountTransactionID,
+                reportID: expenseReportID,
+                amount: 5000,
+                currency: CONST.CURRENCY.USD,
+                status: CONST.TRANSACTION.STATUS.POSTED,
+                reimbursable: true,
+            };
+
+            const missingCategoryTransaction: Transaction = {
+                ...createRandomTransaction(827),
+                transactionID: missingCategoryTransactionID,
+                reportID: expenseReportID,
+                amount: 3000,
+                currency: CONST.CURRENCY.USD,
+                status: CONST.TRANSACTION.STATUS.POSTED,
+                reimbursable: true,
+            };
+
+            const modifiedAmountViolationsKey = `${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${modifiedAmountTransactionID}` as OnyxKey;
+            const missingCategoryViolationsKey = `${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${missingCategoryTransactionID}` as OnyxKey;
+            const transactionViolationsCollection: OnyxCollection<TransactionViolation[]> = {
+                [modifiedAmountViolationsKey]: [
+                    {
+                        name: CONST.VIOLATIONS.MODIFIED_AMOUNT,
+                        type: CONST.VIOLATION_TYPES.NOTICE,
+                        showInReview: true,
+                    },
+                ],
+                // A hard violation that is visible to the submitter must keep raising the LHN RBR after submission.
+                [missingCategoryViolationsKey]: [
+                    {
+                        name: CONST.VIOLATIONS.MISSING_CATEGORY,
+                        type: CONST.VIOLATION_TYPES.VIOLATION,
+                        showInReview: true,
+                    },
+                ],
+            };
+
+            await Onyx.merge(ONYXKEYS.SESSION, {accountID: currentUserAccountID, email: currentUserEmail});
+            await waitForBatchedUpdates();
+
+            await Promise.all([
+                Onyx.merge(`${ONYXKEYS.COLLECTION.POLICY}${policyID}`, policyData),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${chatReport.reportID}`, chatReport),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${expenseReport.reportID}`, expenseReport),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${modifiedAmountTransaction.transactionID}`, modifiedAmountTransaction),
+                Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${missingCategoryTransaction.transactionID}`, missingCategoryTransaction),
+                Onyx.merge(modifiedAmountViolationsKey, transactionViolationsCollection[modifiedAmountViolationsKey]),
+                Onyx.merge(missingCategoryViolationsKey, transactionViolationsCollection[missingCategoryViolationsKey]),
+            ]);
+            await waitForBatchedUpdates();
+
+            const result = getViolatingReportIDForRBRInLHN(chatReport, transactionViolationsCollection);
+            expect(result).toBe(expenseReportID);
+
+            await Onyx.clear();
+        });
     });
 
     it('should surface a GBR for admin with held expenses requiring approval or payment and avoid showing an RBR', async () => {

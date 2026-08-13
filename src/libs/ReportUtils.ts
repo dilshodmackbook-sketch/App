@@ -279,6 +279,7 @@ import {
     getTransactionID,
     getWaypoints,
     hasMissingSmartscanFields as hasMissingSmartscanFieldsTransactionUtils,
+    getVisibleTransactionViolations,
     hasNoticeTypeViolation,
     hasReceipt as hasReceiptTransactionUtils,
     hasViolation,
@@ -9503,22 +9504,42 @@ function getViolatingReportIDForRBRInLHN(report: OnyxEntry<Report>, transactionV
                 return false;
             }
 
-            const excludedNoticeNamesForLHN = isProcessingReport(potentialReport) ? [CONST.VIOLATIONS.MODIFIED_AMOUNT] : [];
+            const excludedViolationNamesForLHN: string[] = isProcessingReport(potentialReport) ? [CONST.VIOLATIONS.MODIFIED_AMOUNT] : [];
+
+            // The RBR branches below (violation/warning/notice) match on raw violations and do NOT apply
+            // shouldShowViolation, unlike the hasVisibleViolationsForUser gate above. That mismatch lets a
+            // violation that is hidden for the submitter (e.g. receiptNotSmartScanned on another transaction in
+            // the same report) still trip a branch once the gate is satisfied by an unrelated visible violation.
+            // Build a per-report collection of only the violations visible to the current user (same filtering the
+            // gate uses) and drop the processing-report excluded names, then feed every branch that same set so
+            // the branches can never fire on a violation the user isn't allowed to see.
+            const currentUserAccountIDForLHN = deprecatedCurrentUserAccountID ?? CONST.DEFAULT_NUMBER_ID;
+            const visibleTransactionViolations: Record<string, TransactionViolation[]> = {};
+            for (const transaction of transactions) {
+                const violationsKey = `${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${transaction.transactionID}`;
+                const rawViolations = transactionViolations?.[violationsKey];
+                if (!rawViolations?.length) {
+                    continue;
+                }
+                // This path only runs for reports the current user submitted, so the report owner is the current user.
+                visibleTransactionViolations[violationsKey] = getVisibleTransactionViolations(
+                    transaction,
+                    rawViolations,
+                    currentUserLogin,
+                    currentUserAccountIDForLHN,
+                    potentialReport,
+                    currentUserLogin,
+                    policy,
+                ).filter((violation) => !excludedViolationNamesForLHN.includes(violation.name));
+            }
 
             return (
                 !isInvoiceReport(potentialReport) &&
-                ViolationsUtils.hasVisibleViolationsForUser(
-                    potentialReport,
-                    transactionViolations,
-                    currentUserLogin,
-                    deprecatedCurrentUserAccountID ?? CONST.DEFAULT_NUMBER_ID,
-                    policy,
-                    transactions,
-                ) &&
+                ViolationsUtils.hasVisibleViolationsForUser(potentialReport, transactionViolations, currentUserLogin, currentUserAccountIDForLHN, policy, transactions) &&
                 (hasViolations(
                     potentialReport.reportID,
-                    transactionViolations,
-                    deprecatedCurrentUserAccountID ?? CONST.DEFAULT_NUMBER_ID,
+                    visibleTransactionViolations,
+                    currentUserAccountIDForLHN,
                     currentUserLogin,
                     true,
                     transactions,
@@ -9529,8 +9550,8 @@ function getViolatingReportIDForRBRInLHN(report: OnyxEntry<Report>, transactionV
                 ) ||
                     hasWarningTypeViolations(
                         potentialReport.reportID,
-                        transactionViolations,
-                        deprecatedCurrentUserAccountID ?? CONST.DEFAULT_NUMBER_ID,
+                        visibleTransactionViolations,
+                        currentUserAccountIDForLHN,
                         currentUserLogin,
                         true,
                         transactions,
@@ -9539,38 +9560,10 @@ function getViolatingReportIDForRBRInLHN(report: OnyxEntry<Report>, transactionV
                         currentUserLogin,
                         policy,
                     ) ||
-                    hasNoticeTypeViolationsForRBRInLHN(
-                        transactionViolations,
-                        deprecatedCurrentUserAccountID ?? CONST.DEFAULT_NUMBER_ID,
-                        currentUserLogin,
-                        transactions,
-                        potentialReport,
-                        policy,
-                        excludedNoticeNamesForLHN,
-                    ))
+                    hasNoticeTypeViolations(potentialReport.reportID, visibleTransactionViolations, currentUserAccountIDForLHN, currentUserLogin, true, transactions))
             );
         });
     return violatingReport ? violatingReport.reportID : null;
-}
-
-function hasNoticeTypeViolationsForRBRInLHN(
-    transactionViolations: OnyxCollection<TransactionViolation[]>,
-    currentUserAccountIDParam: number,
-    currentUserEmailParam: string,
-    reportTransactions: Transaction[],
-    report: OnyxEntry<Report>,
-    policy: OnyxEntry<Policy>,
-    excludedViolationNames: string[],
-): boolean {
-    return reportTransactions.some((transaction) => {
-        const rawViolations = transactionViolations?.[`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${transaction?.transactionID}`];
-        if (!rawViolations?.length) {
-            return false;
-        }
-        const filteredViolations = excludedViolationNames.length > 0 ? rawViolations.filter((violation) => !excludedViolationNames.includes(violation.name)) : rawViolations;
-        // This path only runs for reports the current user submitted, so the report owner is the current user.
-        return hasNoticeTypeViolation(transaction, filteredViolations, currentUserEmailParam, currentUserAccountIDParam, report, currentUserEmailParam, policy, true);
-    });
 }
 
 /**
