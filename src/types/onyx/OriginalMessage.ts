@@ -1448,6 +1448,11 @@ type OriginalMessageExportIntegration = {
      * The type of the export action
      */
     type?: string;
+
+    /**
+     * Whether the export to the integration is currently in progress
+     */
+    inProgress?: boolean;
 };
 
 /** Model of `unapproved` report action */

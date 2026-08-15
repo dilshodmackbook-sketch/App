@@ -13215,13 +13215,20 @@ function hasExportError(reportActions: OnyxEntry<ReportActions> | ReportAction[]
 
 /**
  * Whether an export to an accounting integration is currently in flight for this report.
- * The in-flight `EXPORTED_TO_INTEGRATION` action carries `pendingAction: ADD` (the same signal that renders the
- * "started exporting..." message). A rejected export returns 200, so it never runs the action's `failureData` — it
- * surfaces later via `hasExportError` (report flag / unreconciled `INTEGRATIONS_MESSAGE`). We bail on `hasExportError`
- * so the export button re-enables for retry, keeping the failed-export behavior from #87654 / #72292 intact.
+ *
+ * An export is "in progress" when the newest export-lifecycle event is a "started" event and no newer "result" event
+ * has settled it. A "started" event is an `EXPORTED_TO_INTEGRATION` action flagged with `pendingAction: ADD` (optimistic
+ * manual export) or `originalMessage.inProgress` (backend-pushed automatic export) — the same signal that renders the
+ * "started exporting..." message. A "result" event is an `INTEGRATIONS_MESSAGE` action (the export finished or failed on
+ * the integration side); `hasExportError` reads the failed subset of those.
+ *
+ * We compare by `created` rather than just checking `hasExportError`, because a rejected export returns 200 (its
+ * `failureData` never runs) and surfaces later as a separate `INTEGRATIONS_MESSAGE`, which leaves `hasExportError` true.
+ * A new export started after that older failure must still lock the button, and a report whose newest event IS the
+ * failure must keep the button enabled for retry — preserving the failed-export behavior from #87654 / #72292.
  */
 function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportAction[], report?: OnyxEntry<Report>): boolean {
-    if (hasExportError(reportActions, report)) {
+    if (report?.isExportedToIntegration) {
         return false;
     }
 
@@ -13230,7 +13237,23 @@ function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportActi
     }
 
     const reportActionList = Array.isArray(reportActions) ? reportActions : Object.values(reportActions);
-    return reportActionList.some((action) => isExportIntegrationAction(action) && action.pendingAction === CONST.RED_BRICK_ROAD_PENDING_ACTION.ADD);
+
+    let latestExportStartedCreated = '';
+    let latestExportResultCreated = '';
+
+    for (const action of reportActionList) {
+        if (isExportIntegrationAction(action)) {
+            const isStarted = action.pendingAction === CONST.RED_BRICK_ROAD_PENDING_ACTION.ADD || !!getOriginalMessage(action)?.inProgress;
+            if (isStarted && isEmptyObject(action.errors) && action.created > latestExportStartedCreated) {
+                latestExportStartedCreated = action.created;
+            }
+        }
+        if (isIntegrationMessageAction(action) && action.created > latestExportResultCreated) {
+            latestExportResultCreated = action.created;
+        }
+    }
+
+    return !!latestExportStartedCreated && latestExportStartedCreated > latestExportResultCreated;
 }
 
 function doesReportContainRequestsFromMultipleUsers(iouReport: OnyxEntry<Report>, shouldExcludeDeletedTransactions = false): boolean {
