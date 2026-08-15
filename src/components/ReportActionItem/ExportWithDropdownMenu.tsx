@@ -11,7 +11,7 @@ import useThemeStyles from '@hooks/useThemeStyles';
 
 import {savePreferredExportMethod as savePreferredExportMethodUtils} from '@libs/actions/Policy/Policy';
 import {exportToIntegration, markAsManuallyExported} from '@libs/actions/Report';
-import {canBeExported as canBeExportedUtils, getIntegrationIcon, isExported as isExportedUtils} from '@libs/ReportUtils';
+import {canBeExported as canBeExportedUtils, getIntegrationIcon, isExported as isExportedUtils, isExportInProgress as isExportInProgressUtils} from '@libs/ReportUtils';
 
 import variables from '@styles/variables';
 
@@ -72,6 +72,7 @@ function ExportWithDropdownMenu({
     const iconToDisplay = getIntegrationIcon(connectionName, expensifyIcons);
     const canBeExported = canBeExportedUtils(report);
     const isExported = isExportedUtils(reportActions, report);
+    const isExportInProgress = isExportInProgressUtils(reportActions, report);
     const flattenedWrapperStyle = StyleSheet.flatten([styles.flex1, wrapperStyle]);
 
     const dropdownOptions: Array<DropdownOption<ReportExportType>> = useMemo(() => {
@@ -150,6 +151,8 @@ function ExportWithDropdownMenu({
             style={[shouldUseNarrowLayout && styles.flexGrow1]}
             wrapperStyle={flattenedWrapperStyle}
             size={CONST.BUTTON_SIZE.MEDIUM}
+            isLoading={isExportInProgress}
+            isDisabled={isExportInProgress}
             sentryLabel={sentryLabel}
         />
     );

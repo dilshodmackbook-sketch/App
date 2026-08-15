@@ -13213,6 +13213,26 @@ function hasExportError(reportActions: OnyxEntry<ReportActions> | ReportAction[]
     return Object.values(reportActions).some((action) => isIntegrationMessageAction(action) && !getOriginalMessage(action)?.result?.reconciled);
 }
 
+/**
+ * Whether an export to an accounting integration is currently in flight for this report.
+ * The in-flight `EXPORTED_TO_INTEGRATION` action carries `pendingAction: ADD` (the same signal that renders the
+ * "started exporting..." message). A rejected export returns 200, so it never runs the action's `failureData` — it
+ * surfaces later via `hasExportError` (report flag / unreconciled `INTEGRATIONS_MESSAGE`). We bail on `hasExportError`
+ * so the export button re-enables for retry, keeping the failed-export behavior from #87654 / #72292 intact.
+ */
+function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportAction[], report?: OnyxEntry<Report>): boolean {
+    if (hasExportError(reportActions, report)) {
+        return false;
+    }
+
+    if (!reportActions) {
+        return false;
+    }
+
+    const reportActionList = Array.isArray(reportActions) ? reportActions : Object.values(reportActions);
+    return reportActionList.some((action) => isExportIntegrationAction(action) && action.pendingAction === CONST.RED_BRICK_ROAD_PENDING_ACTION.ADD);
+}
+
 function doesReportContainRequestsFromMultipleUsers(iouReport: OnyxEntry<Report>, shouldExcludeDeletedTransactions = false): boolean {
     const transactions = getReportTransactions(iouReport?.reportID).filter(
         (transaction) => !shouldExcludeDeletedTransactions || transaction.pendingAction !== CONST.RED_BRICK_ROAD_PENDING_ACTION.DELETE,
@@ -14387,6 +14407,7 @@ export {
     canBeExported,
     isExported,
     hasExportError,
+    isExportInProgress,
     hasOnlyNonReimbursableTransactions,
     getReportLastMessage,
     getReportLastVisibleActionCreated,
