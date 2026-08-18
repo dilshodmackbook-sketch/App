@@ -16,12 +16,13 @@ import type {SettingsNavigatorParamList} from '@navigation/types';
 import AccessOrNotFoundWrapper from '@pages/workspace/AccessOrNotFoundWrapper';
 
 import {clearWorkspaceOwnerChangeFlow} from '@userActions/Policy/Member';
+import {openPolicyProfilePage} from '@userActions/Policy/Policy';
 
 import CONST from '@src/CONST';
 import {DYNAMIC_ROUTES} from '@src/ROUTES';
 import type SCREENS from '@src/SCREENS';
 
-import React, {useCallback, useRef} from 'react';
+import React, {useCallback, useEffect, useRef} from 'react';
 
 type DynamicWorkspaceOwnerChangeSuccessPageProps = PlatformStackScreenProps<SettingsNavigatorParamList, typeof SCREENS.WORKSPACE.DYNAMIC_OWNER_CHANGE_SUCCESS>;
 
@@ -31,6 +32,13 @@ function DynamicWorkspaceOwnerChangeSuccessPage({route}: DynamicWorkspaceOwnerCh
 
     const policyID = route.params.policyID;
     const backPath = useDynamicBackPath(DYNAMIC_ROUTES.WORKSPACE_OWNER_CHANGE_SUCCESS.path);
+
+    // The transfer only updates `owner`/`ownerAccountID` locally; the reimburser the backend derives from the new
+    // owner is never refreshed, so it stays pointing at the former owner and blocks removing them. Re-read the policy
+    // (with bank-account data) once the success screen mounts so the client picks up the server's fresh reimburser.
+    useEffect(() => {
+        openPolicyProfilePage(policyID);
+    }, [policyID]);
 
     const closePage = useCallback(() => {
         Navigation.goBack(backPath);
