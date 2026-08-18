@@ -1,0 +1,66 @@
+diff --git a/node_modules/react-native/ReactAndroid/src/main/jni/react/fabric/FabricMountingManager.cpp b/node_modules/react-native/ReactAndroid/src/main/jni/react/fabric/FabricMountingManager.cpp
+--- a/node_modules/react-native/ReactAndroid/src/main/jni/react/fabric/FabricMountingManager.cpp
++++ b/node_modules/react-native/ReactAndroid/src/main/jni/react/fabric/FabricMountingManager.cpp
+@@ -572,8 +572,18 @@
+   auto surfaceId = transaction.getSurfaceId();
+   auto& mutations = transaction.getMutations();
+ 
++  // Mount-item reordering defers Delete (and update) mutations to the end of
++  // the batch. That is only sound for a single differ transaction; when Fabric
++  // merges pending transactions on Android (a busy UI thread lets React commits
++  // outpace mounting), a deferred Delete can execute after a same-tag
++  // Create/Insert and tear the just-mounted view out from under the shadow
++  // tree - see the "FIXME: this optimization is incorrect when multiple
++  // transactions are merged together" on the "Write deletes last" block below.
++  // Keep mutations in their original, differ-emitted order for merged
++  // transactions so the native tree cannot diverge.
+   bool maintainMutationOrder =
+-      ReactNativeFeatureFlags::disableMountItemReorderingAndroid();
++      ReactNativeFeatureFlags::disableMountItemReorderingAndroid() ||
++      transaction.wasMerged();
+ 
+   auto revisionNumber = telemetry.getRevisionNumber();
+ 
+diff --git a/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.cpp b/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.cpp
+--- a/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.cpp
++++ b/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.cpp
+@@ -54,8 +54,14 @@
+   // TODO T186641819: Telemetry for merged transactions is not supported, use
+   // the latest instance
+   telemetry_ = std::move(transaction.telemetry_);
++
++  merged_ = true;
+ }
+ 
++bool MountingTransaction::wasMerged() const {
++  return merged_;
++}
++
+ bool MountingTransaction::canMergeWith(MountingTransaction& transaction) {
+     std::set<Tag> deletedTags;
+     for (const auto& mutation : mutations_) {
+diff --git a/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.h b/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.h
+--- a/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.h
++++ b/node_modules/react-native/ReactCommon/react/renderer/mounting/MountingTransaction.h
+@@ -91,11 +91,21 @@
+    */
+   bool canMergeWith(MountingTransaction &transaction);
+ 
++  /*
++   * Whether this transaction is the result of merging one or more other
++   * transactions into it. Merged transactions must not have their mount items
++   * reordered on Android (see FabricMountingManager), because deferring a
++   * Delete past a same-tag Create/Insert from a different transaction diverges
++   * the native tree from the shadow tree.
++   */
++  bool wasMerged() const;
++
+  private:
+   SurfaceId surfaceId_;
+   Number number_;
+   ShadowViewMutationList mutations_;
+   mutable TransactionTelemetry telemetry_;
++  bool merged_{false};
+ };
+ 
+ } // namespace facebook::react
