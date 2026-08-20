@@ -2218,6 +2218,7 @@ function createDistanceRequest(distanceRequestInformation: CreateDistanceRequest
                 reimbursable,
                 attendees,
                 waypoints: validWaypoints,
+                customUnitRateID,
                 odometerStart,
                 odometerEnd,
             },

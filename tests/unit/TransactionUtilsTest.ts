@@ -1094,6 +1094,68 @@ describe('TransactionUtils', () => {
         });
     });
 
+    describe('buildOptimisticTransaction (distance rate ID)', () => {
+        it('keeps the draft rate ID when no customUnitRateID is passed and does not mutate the draft', () => {
+            // Given a manual distance draft transaction that already has a rate ID selected (e.g. created offline)
+            const draftTransaction = generateTransaction({
+                iouRequestType: CONST.IOU.REQUEST_TYPE.DISTANCE_MANUAL,
+                comment: {
+                    customUnit: {
+                        customUnitRateID: 'rate1',
+                        quantity: 25,
+                    },
+                },
+            });
+
+            // When we build the optimistic transaction from that draft without re-supplying customUnitRateID
+            const optimisticTransaction = TransactionUtils.buildOptimisticTransaction({
+                existingTransactionID: draftTransaction.transactionID,
+                existingTransaction: draftTransaction,
+                transactionParams: {
+                    amount: 1000,
+                    currency: 'USD',
+                    reportID: '1',
+                    comment: '',
+                    created: '2023-10-01',
+                    distance: 25,
+                },
+            });
+
+            // Then the optimistic transaction preserves the draft's rate ID (so getRateID resolves a real policy rate, not FAKE_P2P_ID)
+            expect(optimisticTransaction.comment?.customUnit?.customUnitRateID).toBe('rate1');
+            // And the draft transaction is not mutated as a side effect
+            expect(draftTransaction.comment?.customUnit?.customUnitRateID).toBe('rate1');
+        });
+
+        it('overwrites the rate ID when a customUnitRateID is explicitly passed', () => {
+            const draftTransaction = generateTransaction({
+                iouRequestType: CONST.IOU.REQUEST_TYPE.DISTANCE_MANUAL,
+                comment: {
+                    customUnit: {
+                        customUnitRateID: 'rate1',
+                        quantity: 25,
+                    },
+                },
+            });
+
+            const optimisticTransaction = TransactionUtils.buildOptimisticTransaction({
+                existingTransactionID: draftTransaction.transactionID,
+                existingTransaction: draftTransaction,
+                transactionParams: {
+                    amount: 1000,
+                    currency: 'USD',
+                    reportID: '1',
+                    comment: '',
+                    created: '2023-10-01',
+                    distance: 25,
+                    customUnitRateID: 'rate2',
+                },
+            });
+
+            expect(optimisticTransaction.comment?.customUnit?.customUnitRateID).toBe('rate2');
+        });
+    });
+
     describe('isScanning', () => {
         it('returns true for a scan-eligible transaction without a manual amount override', () => {
             const transaction = generateTransaction({
