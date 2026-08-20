@@ -104,6 +104,15 @@ function DistanceRequestController({
             return;
         }
 
+        // Re-binding the transaction to the destination report is an async Onyx write, so for a brief window
+        // `policy` still resolves to policyForMovingExpenses (the user's active workspace) rather than the
+        // workspace they just picked. Skip validating/auto-selecting until the resolved policy actually matches
+        // a selected participant's workspace — mirroring the auto-select effect below — so we never overwrite the
+        // draft with a foreign workspace's rate ID (which also nulls defaultP2PRate and cannot self-heal).
+        if (!selectedParticipants.some((participant) => participant.policyID === policy?.id)) {
+            return;
+        }
+
         const errorKey = 'iou.error.invalidRate';
         const policyRates = DistanceRequestUtils.getMileageRates(policy);
 
@@ -141,6 +150,7 @@ function DistanceRequestController({
         transaction,
         prevPolicy?.id,
         personalPolicy?.outputCurrency,
+        selectedParticipants,
     ]);
 
     useEffect(() => {
