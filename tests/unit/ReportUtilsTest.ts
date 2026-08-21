@@ -157,6 +157,7 @@ import {
     hasActionWithErrorsForTransaction,
     hasEmptyReportsForPolicy,
     hasExportError,
+    isExportInProgress,
     hasNonReimbursableTransactions,
     hasReceiptError,
     hasSmartscanError,
@@ -22546,5 +22547,82 @@ describe('getPendingChatMembers', () => {
         const result = getPendingChatMembers(accountIDs, previousPendingChatMembers, CONST.RED_BRICK_ROAD_PENDING_ACTION.DELETE);
 
         expect(result).toEqual(previousPendingChatMembers);
+    });
+});
+
+describe('isExportInProgress', () => {
+    const ADD = CONST.RED_BRICK_ROAD_PENDING_ACTION.ADD;
+
+    /** Build an `EXPORTED_TO_INTEGRATION` "started exporting..." action. */
+    function buildStartedAction(
+        created: string,
+        {inProgress = false, pendingAction = ADD, errors = {}}: {inProgress?: boolean; pendingAction?: ReportAction['pendingAction']; errors?: ReportAction['errors']} = {},
+    ): ReportAction {
+        return createMock<ReportAction>({
+            actionName: CONST.REPORT.ACTIONS.TYPE.EXPORTED_TO_INTEGRATION,
+            created,
+            pendingAction,
+            errors,
+            originalMessage: {label: 'NetSuite', lastModified: created, markedManually: false, inProgress},
+        });
+    }
+
+    /** Build an `INTEGRATIONS_MESSAGE` export-result action (the export finished or failed on the integration side). */
+    function buildResultAction(created: string): ReportAction {
+        return createMock<ReportAction>({
+            actionName: CONST.REPORT.ACTIONS.TYPE.INTEGRATIONS_MESSAGE,
+            created,
+            pendingAction: null,
+            errors: {},
+            originalMessage: {result: {success: false, reconciled: false}},
+        });
+    }
+
+    it('returns true while a pending export is the newest lifecycle event (manual optimistic start)', () => {
+        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000')];
+
+        expect(isExportInProgress(reportActions)).toBe(true);
+    });
+
+    it('returns true for a backend-pushed automatic export flagged only via originalMessage.inProgress', () => {
+        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000', {inProgress: true, pendingAction: undefined})];
+
+        expect(isExportInProgress(reportActions)).toBe(true);
+    });
+
+    it('returns true when a new export starts after an older failure (the reported auto-sync repro)', () => {
+        const reportActions = [buildResultAction('2026-08-19 12:40:00.000'), buildStartedAction('2026-08-19 12:45:00.000')];
+
+        expect(isExportInProgress(reportActions)).toBe(true);
+    });
+
+    it('returns false when the newest event is a failure result, so the button stays enabled for retry (#87654 / #72292)', () => {
+        const reportActions = [buildStartedAction('2026-08-19 12:40:00.000'), buildResultAction('2026-08-19 12:45:00.000')];
+
+        expect(isExportInProgress(reportActions)).toBe(false);
+    });
+
+    it('returns false when the start action itself was rejected (carries errors), so it can be retried', () => {
+        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000', {errors: {'123': 'Oops... something went wrong...'}})];
+
+        expect(isExportInProgress(reportActions)).toBe(false);
+    });
+
+    it('returns false once the report is fully exported, leaving the "export again" confirm flow untouched', () => {
+        const report = {...createRandomReport(1), isExportedToIntegration: true};
+        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000')];
+
+        expect(isExportInProgress(reportActions, report)).toBe(false);
+    });
+
+    it('returns false when the report has no export actions at all', () => {
+        const reportActions = [createRandomReportAction(1)];
+
+        expect(isExportInProgress(reportActions)).toBe(false);
+    });
+
+    it('returns false for empty or missing report actions', () => {
+        expect(isExportInProgress([])).toBe(false);
+        expect(isExportInProgress(undefined)).toBe(false);
     });
 });
