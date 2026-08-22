@@ -199,19 +199,21 @@ type AmountHasUnsavedChangesParams = {
     isCreateEntry: boolean;
     selectedCurrency: string;
     originalCurrency: string;
+    signChanged: boolean;
 };
 
 /**
  * Whether the amount step has unsaved input. Emptiness is judged on the raw string (so a typed "0" counts) and the
- * change in backend units (so "5" vs "5.00" isn't a false positive); a currency change counts on its own.
+ * change in backend units (so "5" vs "5.00" isn't a false positive); a currency change or a sign toggle counts on its
+ * own, so flipping +/- on an empty amount is still treated as dirty.
  */
-function getAmountHasUnsavedChanges({typedAmount, committedAmount, isCreateEntry, selectedCurrency, originalCurrency}: AmountHasUnsavedChangesParams): boolean {
+function getAmountHasUnsavedChanges({typedAmount, committedAmount, isCreateEntry, selectedCurrency, originalCurrency, signChanged}: AmountHasUnsavedChangesParams): boolean {
     const currencyChanged = selectedCurrency !== originalCurrency;
     if (isCreateEntry) {
-        return typedAmount !== '' || committedAmount !== 0 || currencyChanged;
+        return typedAmount !== '' || committedAmount !== 0 || currencyChanged || signChanged;
     }
     const typedAmountInBackendUnits = typedAmount ? convertToBackendAmount(Number.parseFloat(typedAmount)) : 0;
-    return typedAmountInBackendUnits !== committedAmount || currencyChanged;
+    return typedAmountInBackendUnits !== committedAmount || currencyChanged || signChanged;
 }
 
 /**

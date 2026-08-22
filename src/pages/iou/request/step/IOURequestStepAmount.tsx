@@ -139,6 +139,8 @@ function IOURequestStepAmount({
     // a change, so the baseline below stands in and a prefilled amount starts clean.
     const [typedAmount, setTypedAmount] = useState<string | undefined>(undefined);
     const baselineAmount = transactionAmount ? convertToFrontendAmountAsString(transactionAmount, decimals) : '';
+    // The committed sign the form starts from, so a sign toggle counts as dirty only when it differs from the baseline.
+    const baselineIsNegative = transactionAmount < 0;
     const {suppressDiscardPrompt} = useDiscardChangesConfirmation({
         getHasUnsavedChanges: () =>
             getAmountHasUnsavedChanges({
@@ -147,6 +149,7 @@ function IOURequestStepAmount({
                 isCreateEntry: isAmountCreateEntry,
                 selectedCurrency,
                 originalCurrency,
+                signChanged: (amountFormRef.current?.isNegative ?? baselineIsNegative) !== baselineIsNegative,
             }),
         onCancel: () => {
             focusTimeoutRef.current = setTimeout(() => textInput.current?.focus(), CONST.ANIMATED_TRANSITION);

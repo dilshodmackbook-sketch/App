@@ -329,7 +329,7 @@ describe('ReportActionsUtils', () => {
 });
 
 describe('getAmountHasUnsavedChanges', () => {
-    const sameCurrency = {selectedCurrency: 'USD', originalCurrency: 'USD'};
+    const sameCurrency = {selectedCurrency: 'USD', originalCurrency: 'USD', signChanged: false};
 
     describe('create entry (any input counts)', () => {
         it('flags a typed value', () => {
@@ -384,8 +384,33 @@ describe('getAmountHasUnsavedChanges', () => {
                     isCreateEntry: true,
                     selectedCurrency: 'EUR',
                     originalCurrency: 'USD',
+                    signChanged: false,
                 }),
             ).toBe(true);
+        });
+
+        it('flags a sign toggle on an empty amount (the regression this fixes)', () => {
+            expect(
+                getAmountHasUnsavedChanges({
+                    ...sameCurrency,
+                    typedAmount: '',
+                    committedAmount: 0,
+                    isCreateEntry: true,
+                    signChanged: true,
+                }),
+            ).toBe(true);
+        });
+
+        it('does not flag an empty amount when the sign is untouched', () => {
+            expect(
+                getAmountHasUnsavedChanges({
+                    ...sameCurrency,
+                    typedAmount: '',
+                    committedAmount: 0,
+                    isCreateEntry: true,
+                    signChanged: false,
+                }),
+            ).toBe(false);
         });
     });
 
@@ -428,8 +453,33 @@ describe('getAmountHasUnsavedChanges', () => {
                     isCreateEntry: false,
                     selectedCurrency: 'EUR',
                     originalCurrency: 'USD',
+                    signChanged: false,
                 }),
             ).toBe(true);
+        });
+
+        it('flags a sign flip away from the committed sign even when the amount is unchanged', () => {
+            expect(
+                getAmountHasUnsavedChanges({
+                    ...sameCurrency,
+                    typedAmount: '5',
+                    committedAmount: 500,
+                    isCreateEntry: false,
+                    signChanged: true,
+                }),
+            ).toBe(true);
+        });
+
+        it('does not flag when the sign matches the committed sign and the amount is unchanged', () => {
+            expect(
+                getAmountHasUnsavedChanges({
+                    ...sameCurrency,
+                    typedAmount: '5',
+                    committedAmount: 500,
+                    isCreateEntry: false,
+                    signChanged: false,
+                }),
+            ).toBe(false);
         });
     });
 });

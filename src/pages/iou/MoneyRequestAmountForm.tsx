@@ -35,6 +35,9 @@ type CurrentMoney = {amount: string; currency: string; paymentMethod?: PaymentMe
 type MoneyRequestAmountFormHandle = {
     /** Returns the currently typed (unsaved) amount, signed the same way the submit handler would send it */
     getNumber: () => string;
+
+    /** Whether the sign toggle is currently negative, exposed as its own signal so an empty-amount sign flip is still visible */
+    isNegative: boolean;
 };
 
 type MoneyRequestAmountFormProps = Omit<MoneyRequestAmountInputProps, 'shouldShowBigNumberPad' | 'onFormatAmount'> & {
@@ -131,6 +134,7 @@ function MoneyRequestAmountForm({
             const number = moneyRequestAmountInputRef.current?.getNumber() ?? '';
             return number && isNegative ? `-${number}` : number;
         },
+        isNegative,
     }));
 
     const [formError, setFormError] = useState<string>('');
