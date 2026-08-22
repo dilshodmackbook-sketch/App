@@ -30,7 +30,7 @@ function ExportPrimaryAction({reportID, onExportModalOpen}: ExportPrimaryActionP
     const {reportActions: unfilteredReportActions} = usePaginatedReportActions(moneyRequestReport?.reportID);
     const reportActions = getFilteredReportActionsForReportView(unfilteredReportActions);
     const isExported = isExportedUtils(reportActions, moneyRequestReport);
-    const isExportInProgress = isExportInProgressUtils(reportActions, moneyRequestReport);
+    const isExportInProgress = isExportInProgressUtils(reportActions);
 
     return (
         <Button

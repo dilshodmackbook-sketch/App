@@ -22584,10 +22584,18 @@ describe('isExportInProgress', () => {
         expect(isExportInProgress(reportActions)).toBe(true);
     });
 
-    it('returns true for a backend-pushed automatic export flagged only via originalMessage.inProgress', () => {
-        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000', {inProgress: true, pendingAction: undefined})];
+    it('returns true for a backend-pushed automatic export, which carries the same pending "started exporting..." flag', () => {
+        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000', {inProgress: true})];
 
         expect(isExportInProgress(reportActions)).toBe(true);
+    });
+
+    it('returns false for a completed export whose pending flag was cleared, even if a stale originalMessage.inProgress lingers', () => {
+        // The backend push that completes the export clears `pendingAction` (the message flips to "exported to..."),
+        // so we key off `pendingAction: ADD` rather than the optimistic-only `inProgress` flag, which the merge may leave set.
+        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000', {inProgress: true, pendingAction: null})];
+
+        expect(isExportInProgress(reportActions)).toBe(false);
     });
 
     it('returns true when a new export starts after an older failure (the reported auto-sync repro)', () => {
@@ -22608,11 +22616,18 @@ describe('isExportInProgress', () => {
         expect(isExportInProgress(reportActions)).toBe(false);
     });
 
-    it('returns false once the report is fully exported, leaving the "export again" confirm flow untouched', () => {
-        const report = {...createRandomReport(1), isExportedToIntegration: true};
+    it('stays true during the optimistic manual export even though isExportedToIntegration is set (suneox: api succeeds, status arrives later)', () => {
+        // `exportToIntegration` sets `isExportedToIntegration` optimistically the instant the export fires, but the started
+        // action is still pending — the button must show the disabled spinner, not flip to "View".
         const reportActions = [buildStartedAction('2026-08-19 12:45:00.000')];
 
-        expect(isExportInProgress(reportActions, report)).toBe(false);
+        expect(isExportInProgress(reportActions)).toBe(true);
+    });
+
+    it('returns false once the export completes and the pending flag is cleared, leaving the "export again" confirm flow untouched', () => {
+        const reportActions = [buildStartedAction('2026-08-19 12:45:00.000', {pendingAction: null})];
+
+        expect(isExportInProgress(reportActions)).toBe(false);
     });
 
     it('returns false when the report has no export actions at all', () => {

@@ -44,6 +44,7 @@ import {
     isCurrentUserSubmitter,
     isExpenseReport as isExpenseReportUtils,
     isExported as isExportedUtil,
+    isExportInProgress as isExportInProgressUtil,
     isHoldCreator,
     isInvoiceReport as isInvoiceReportUtils,
     isIOUReport as isIOUReportUtils,
@@ -296,7 +297,10 @@ function isExportAction(report: Report, currentUserLogin: string, policy?: Polic
 
     const syncEnabled = hasIntegrationAutoSync(policy, connectedIntegration);
     const isExported = isExportedUtil(reportActions, report);
-    if (isExported) {
+    // Keep the button rendered while an export is in flight so it can show the disabled spinner. `exportToIntegration`
+    // sets `isExportedToIntegration` optimistically the moment a manual export fires, so without this the button would
+    // flip straight to "View" instead of showing the in-progress state.
+    if (isExported && !isExportInProgressUtil(reportActions)) {
         return false;
     }
 

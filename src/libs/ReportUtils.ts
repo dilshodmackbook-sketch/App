@@ -13217,21 +13217,23 @@ function hasExportError(reportActions: OnyxEntry<ReportActions> | ReportAction[]
  * Whether an export to an accounting integration is currently in flight for this report.
  *
  * An export is "in progress" when the newest export-lifecycle event is a "started" event and no newer "result" event
- * has settled it. A "started" event is an `EXPORTED_TO_INTEGRATION` action flagged with `pendingAction: ADD` (optimistic
- * manual export) or `originalMessage.inProgress` (backend-pushed automatic export) — the same signal that renders the
- * "started exporting..." message. A "result" event is an `INTEGRATIONS_MESSAGE` action (the export finished or failed on
- * the integration side); `hasExportError` reads the failed subset of those.
+ * has settled it. A "started" event is an `EXPORTED_TO_INTEGRATION` action still flagged with `pendingAction: ADD` — the
+ * same signal that renders the "started exporting..." message (`getExportIntegrationActionFragments`), produced both by
+ * the optimistic manual export and by the backend-pushed automatic export. Once the export completes, the backend push
+ * clears that pending flag (the message flips to "exported to..."), so this naturally returns `false` again. A "result"
+ * event is an `INTEGRATIONS_MESSAGE` action (the export finished or failed on the integration side); `hasExportError`
+ * reads the failed subset of those.
+ *
+ * We do NOT short-circuit on `report.isExportedToIntegration`: `exportToIntegration` sets that flag optimistically the
+ * instant the manual export is fired, so keying on it would hide the in-flight window (the button would flip straight to
+ * "View" instead of showing the spinner). The pending export action is the accurate in-flight signal here.
  *
  * We compare by `created` rather than just checking `hasExportError`, because a rejected export returns 200 (its
  * `failureData` never runs) and surfaces later as a separate `INTEGRATIONS_MESSAGE`, which leaves `hasExportError` true.
  * A new export started after that older failure must still lock the button, and a report whose newest event IS the
  * failure must keep the button enabled for retry — preserving the failed-export behavior from #87654 / #72292.
  */
-function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportAction[], report?: OnyxEntry<Report>): boolean {
-    if (report?.isExportedToIntegration) {
-        return false;
-    }
-
+function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportAction[]): boolean {
     if (!reportActions) {
         return false;
     }
@@ -13243,7 +13245,7 @@ function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportActi
 
     for (const action of reportActionList) {
         if (isExportIntegrationAction(action)) {
-            const isStarted = action.pendingAction === CONST.RED_BRICK_ROAD_PENDING_ACTION.ADD || !!getOriginalMessage(action)?.inProgress;
+            const isStarted = action.pendingAction === CONST.RED_BRICK_ROAD_PENDING_ACTION.ADD;
             if (isStarted && isEmptyObject(action.errors) && action.created > latestExportStartedCreated) {
                 latestExportStartedCreated = action.created;
             }

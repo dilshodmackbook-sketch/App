@@ -47,6 +47,8 @@ function useReportPreviewActionDecision({
     const [policy] = useOnyx(`${ONYXKEYS.COLLECTION.POLICY}${iouReport?.policyID}`);
     const [bankAccountList] = useOnyx(ONYXKEYS.BANK_ACCOUNT_LIST);
     const [iouReportMetadata] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT_METADATA}${iouReportID}`);
+    const [iouReportActions] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${iouReportID}`);
+    const reportActions = Object.values(iouReportActions ?? {});
     const [ownerLogin] = useOnyx(ONYXKEYS.PERSONAL_DETAILS_LIST, {selector: personalDetailsLoginSelector(iouReport?.ownerAccountID)}, [iouReport?.ownerAccountID]);
 
     const isDEWPolicy = hasDynamicExternalWorkflow(policy);
@@ -97,6 +99,7 @@ function useReportPreviewActionDecision({
         violationsData: transactionViolations,
         reportMetadata: iouReportMetadata,
         ownerLogin,
+        reportActions,
     });
 
     return {reportPreviewAction, canIOUBePaid, onlyShowPayElsewhere, shouldShowPayButton, connectedIntegration};
