@@ -6391,6 +6391,36 @@ describe('SearchUIUtils', () => {
                 const item = sections.find((s) => s.transactionID === filterTestTxID);
                 expect(item?.submitted).toBe('');
             });
+
+            // Regression for https://github.com/Expensify/App/issues/96982: the flat transactions list must
+            // fall back to the live Onyx personal details when an account is missing from the snapshot's own
+            // `personalDetailsList` (e.g. the most-recently created row the shape-preserving snapshot sync never
+            // copied a details entry for), mirroring the grouped/report path. Otherwise the `from` name blanks.
+            describe('personal details live fallback', () => {
+                // filterTestTxID has no money-request report action, so `from` resolves to the report owner (adminAccountID).
+                function makeDataWithoutOwnerDetails() {
+                    const personalDetailsWithoutOwner = Object.fromEntries(Object.entries(searchResults.data.personalDetailsList ?? {}).filter(([id]) => id !== String(adminAccountID)));
+                    return makeFilterTestData({}, {}, {personalDetailsList: personalDetailsWithoutOwner});
+                }
+
+                it('renders a blank `from` when the owner is absent from the snapshot personalDetailsList and no live fallback is provided', () => {
+                    const [sections] = callGetTransactionsSections(makeDataWithoutOwnerDetails());
+                    const item = sections.find((s) => s.transactionID === filterTestTxID);
+                    expect(item?.from?.displayName).toBeUndefined();
+                    expect(item?.from?.accountID).toBe(CONST.REPORT.OWNER_ACCOUNT_ID_FAKE);
+                });
+
+                it('recovers the `from` name from live Onyx personal details when the owner is absent from the snapshot personalDetailsList', () => {
+                    const [sections] = callGetTransactionsSections(makeDataWithoutOwnerDetails(), {
+                        onyxPersonalDetailsList: {
+                            [adminAccountID]: {accountID: adminAccountID, displayName: 'Admin', login: adminEmail},
+                        },
+                    });
+                    const item = sections.find((s) => s.transactionID === filterTestTxID);
+                    expect(item?.from?.accountID).toBe(adminAccountID);
+                    expect(item?.from?.displayName).toBe('Admin');
+                });
+            });
         });
 
         describe('getReportSections filtering and edge cases', () => {

@@ -292,6 +292,7 @@ type GetTransactionSectionsParams = {
     queryJSON?: SearchQueryJSON;
     isAttendeesEnabledForMovingPolicy?: boolean;
     optimisticTransactionID?: string;
+    onyxPersonalDetailsList?: OnyxTypes.PersonalDetailsList;
 };
 
 const transactionColumnNamesToSortingProperty: TransactionSorting = {
@@ -2187,6 +2188,7 @@ function getTransactionsSections({
     queryJSON,
     isAttendeesEnabledForMovingPolicy,
     optimisticTransactionID,
+    onyxPersonalDetailsList,
 }: GetTransactionSectionsParams): [TransactionListItemType[], number, boolean] {
     const {
         transactionKeys,
@@ -2206,7 +2208,12 @@ function getTransactionsSections({
         hasDeletedTransaction,
     } = classifyAndPreprocess(data);
 
-    const personalDetailsMap = new Map(Object.entries(data.personalDetailsList ?? {}));
+    // Fall back to the live Onyx personal details for accounts missing from the snapshot's own copy,
+    // mirroring the grouped/report path (getReportSections). Without this, a transaction whose owner is
+    // absent from the snapshot's personalDetailsList (e.g. an optimistically created row the shape-preserving
+    // snapshot sync never copied a personal-details entry for) renders a blank `from` name.
+    const mergedPersonalDetails = mergePersonalDetailsLists(onyxPersonalDetailsList, data.personalDetailsList);
+    const personalDetailsMap = new Map(Object.entries(mergedPersonalDetails));
 
     const transactionsSections: TransactionListItemType[] = [];
 
@@ -2250,7 +2257,7 @@ function getTransactionsSections({
             // Use Map.get() for faster lookups with default values
             const fromAccountID = reportAction?.actorAccountID ?? report?.ownerAccountID;
             const from = fromAccountID ? (personalDetailsMap.get(fromAccountID.toString()) ?? emptyPersonalDetails) : emptyPersonalDetails;
-            const to = getToFieldValueForTransaction(transactionItem, report, data.personalDetailsList, reportAction);
+            const to = getToFieldValueForTransaction(transactionItem, report, mergedPersonalDetails, reportAction);
             const isIOUReport = report?.type === CONST.REPORT.TYPE.IOU;
 
             const {formattedFrom, formattedTo, formattedTotal, formattedMerchant, date, posted} = getTransactionItemCommonFormattedProperties(
@@ -2269,7 +2276,9 @@ function getTransactionsSections({
             const allActions = getActions(data, allViolations, key, currentSearch, currentUserEmail, currentAccountID, bankAccountList, reportMetadata, actions);
             const transactionPendingAction = getTransactionPendingAction(transactionItem);
             const reportOwnerAccountIDAsAttendee = getReportOwnerAccountIDAsAttendee(transactionItem, currentAccountID);
-            const reportOwnerAsAttendee = reportOwnerAccountIDAsAttendee ? getReportOwnerAsAttendee(personalDetailsMap.get(reportOwnerAccountIDAsAttendee.toString())) : undefined;
+            const reportOwnerAsAttendee = reportOwnerAccountIDAsAttendee
+                ? getReportOwnerAsAttendee(personalDetailsMap.get(reportOwnerAccountIDAsAttendee.toString()) ?? undefined)
+                : undefined;
             const transactionAttendees = getAttendees(transactionItem, reportOwnerAsAttendee);
             const isUnreported = transactionItem.reportID === CONST.REPORT.UNREPORTED_REPORT_ID;
             // For unreported transactions, attendee tracking is gated by the policy-for-moving-expenses.
@@ -3960,6 +3969,7 @@ function getSections({
         queryJSON,
         isAttendeesEnabledForMovingPolicy,
         optimisticTransactionID,
+        onyxPersonalDetailsList,
     });
 }
 
