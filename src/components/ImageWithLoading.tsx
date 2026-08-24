@@ -1,6 +1,8 @@
 import useNetwork from '@hooks/useNetwork';
 import useThemeStyles from '@hooks/useThemeStyles';
 
+import CONST from '@src/CONST';
+
 import type {LayoutChangeEvent, StyleProp, ViewStyle} from 'react-native';
 
 import delay from 'lodash/delay';
@@ -49,13 +51,21 @@ function ImageWithLoading({
 }: ImageWithSizeLoadingProps) {
     const styles = useThemeStyles();
     const isLoadedRef = useRef<boolean | null>(null);
+    // The preview has actually painted (not merely errored). A ref so the timeout hand-off can read it without a stale
+    // closure, and so painting it never forces an extra render.
+    const isPreviewPaintedRef = useRef(false);
     const [isImageCached, setIsImageCached] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
-    // The full-resolution image is not guaranteed to ever emit `onLoad`/`onError` (e.g. a receipt derivative that is
-    // still being generated server-side), so `isLoading` can stay `true` indefinitely. Once the low-resolution preview
-    // is on screen we have something readable to show, so the loading state must stop being visible at that point.
-    const [isThumbnailLoading, setIsThumbnailLoading] = useState(!!previewUri);
+    // The full-resolution image has actually painted. Drives the reveal of the sharp image over the preview base layer.
+    const [isOriginalLoaded, setIsOriginalLoaded] = useState(false);
+    // Neither derivative is guaranteed to ever emit `onLoad`/`onError` (a still-generating derivative stays silent), so
+    // the transition is bounded: once it expires the loading visuals give up instead of latching on forever.
+    const [hasTransitionExpired, setHasTransitionExpired] = useState(false);
     const {isOffline} = useNetwork();
+
+    // The low-res -> full-res transition (dimmed preview + spinner) is only ever active while the full-resolution image
+    // is genuinely in flight, and it can never outlive that image because the timeout below always ends it.
+    const isTransitioning = isLoading && !isOriginalLoaded && !isImageCached && !isOffline && !hasTransitionExpired;
 
     const handleError = () => {
         onError?.();
@@ -73,6 +83,7 @@ function ImageWithLoading({
         isLoadedRef.current = true;
         setIsLoading(false);
         setIsImageCached(true);
+        setIsOriginalLoaded(true);
         onLoad?.(e);
     };
 
@@ -90,21 +101,43 @@ function ImageWithLoading({
         return () => clearTimeout(timeout);
     }, [isLoading]);
 
+    // Bound the transition so a full-resolution image that never settles cannot keep the dim/spinner on forever. This is
+    // scoped to receipts (they are the only caller that passes `previewUri`) so slow ordinary images are untouched.
+    useEffect(() => {
+        if (!previewUri || !isLoading || isOffline || isOriginalLoaded || hasTransitionExpired) {
+            return;
+        }
+        const timeout = delay(() => {
+            setHasTransitionExpired(true);
+            // If neither derivative ever painted (the per-diem repro), hand over to the receipt placeholder instead of
+            // leaving a blank box under no spinner. `handleError` runs here in the timer callback, not synchronously in
+            // an effect body, so it does not trigger cascading renders.
+            if (isLoadedRef.current || isPreviewPaintedRef.current) {
+                return;
+            }
+            handleError();
+        }, CONST.TIMING.RECEIPT_TRANSITION_TIMEOUT);
+        return () => clearTimeout(timeout);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- handleError is intentionally excluded: it is recreated every render, and including it would restart the transition timer on every render.
+    }, [previewUri, isLoading, isOffline, isOriginalLoaded, hasTransitionExpired]);
+
     return (
         <View
             style={[styles.w100, styles.h100, containerStyles]}
             onLayout={onLayout}
         >
-            {isLoading &&
-                !!previewUri && (
+            {!!previewUri &&
+                !isOriginalLoaded && (
+                    // The preview is the always-visible base layer: it stays on screen until the sharp image actually
+                    // paints, and it is dimmed only while the transition is genuinely active.
                     // eslint-disable-next-line react-native-a11y/has-valid-accessibility-ignores-invert-colors -- Custom Image wrapper does not support this prop.
                     <Image
                         {...rest}
                         source={{uri: previewUri}}
-                        style={[styles.w100, styles.h100, style]}
+                        style={[styles.w100, styles.h100, isTransitioning && styles.opacitySemiTransparent, style]}
                         resizeMode={resizeMode}
                         onLoad={(e) => {
-                            setIsThumbnailLoading(false);
+                            isPreviewPaintedRef.current = true;
                             onLoad?.(e);
                         }}
                         loadingIconSize={loadingIconSize}
@@ -130,15 +163,17 @@ function ImageWithLoading({
                     // Called when the image should wait for a valid session to reload
                     // At the moment this function is called, the image is not in cache anymore
                     isLoadedRef.current = false;
+                    isPreviewPaintedRef.current = false;
                     setIsImageCached(false);
                     setIsLoading(true);
-                    setIsThumbnailLoading(!!previewUri);
+                    setIsOriginalLoaded(false);
+                    setHasTransitionExpired(false);
                     waitForSession?.();
                 }}
                 loadingIconSize={loadingIconSize}
                 loadingIndicatorStyles={loadingIndicatorStyles}
             />
-            {isLoading && (!previewUri || isThumbnailLoading) && !isImageCached && !isOffline && (
+            {isTransitioning && (
                 <LoadingIndicator
                     iconSize={loadingIconSize}
                     style={[styles.opacity1, styles.bgTransparent, loadingIndicatorStyles]}

@@ -2147,6 +2147,10 @@ const CONST = {
         SHOW_HOVER_PREVIEW_ANIMATION_DURATION: 250,
         ACTIVITY_INDICATOR_TIMEOUT: 10000,
         GET_INITIAL_URL_TIMEOUT: 10000,
+        // Upper bound on the receipt low-res -> full-res transition. Neither derivative is guaranteed to ever emit
+        // `onLoad`/`onError` (a still-generating derivative stays silent), so the transition is bounded to make sure the
+        // loading state can never latch on forever. See ImageWithLoading.
+        RECEIPT_TRANSITION_TIMEOUT: 5000,
         MIN_SMOOTH_SCROLL_EVENT_THROTTLE: 16,
     },
     DEFERRED_LAYOUT_WRITE_KEYS: {
