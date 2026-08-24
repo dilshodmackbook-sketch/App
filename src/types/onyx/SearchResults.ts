@@ -84,6 +84,10 @@ type SearchResultsInfo = {
     /** The number of results */
     count?: number;
 
+    /** The number of matching reports across all pages, for grouped/expense-report searches. Distinct from
+     * `count`, which is the number of expenses. Used to label "Select all matching" on the Reports tab. */
+    groupCount?: number;
+
     /** The total spend */
     total?: number;
 
