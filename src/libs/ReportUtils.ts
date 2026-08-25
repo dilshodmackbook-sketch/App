@@ -13214,26 +13214,26 @@ function hasExportError(reportActions: OnyxEntry<ReportActions> | ReportAction[]
 }
 
 /**
- * Whether an export to an accounting integration is currently in flight for this report.
+ * Whether an export is in flight based on the report's action history.
  *
  * An export is "in progress" when the newest export-lifecycle event is a "started" event and no newer "result" event
  * has settled it. A "started" event is an `EXPORTED_TO_INTEGRATION` action still flagged with `pendingAction: ADD` — the
  * same signal that renders the "started exporting..." message (`getExportIntegrationActionFragments`), produced both by
- * the optimistic manual export and by the backend-pushed automatic export. Once the export completes, the backend push
- * clears that pending flag (the message flips to "exported to..."), so this naturally returns `false` again. A "result"
- * event is an `INTEGRATIONS_MESSAGE` action (the export finished or failed on the integration side); `hasExportError`
- * reads the failed subset of those.
- *
- * We do NOT short-circuit on `report.isExportedToIntegration`: `exportToIntegration` sets that flag optimistically the
- * instant the manual export is fired, so keying on it would hide the in-flight window (the button would flip straight to
- * "View" instead of showing the spinner). The pending export action is the accurate in-flight signal here.
+ * the optimistic manual export and by the backend-pushed automatic export. This is the only signal available for the
+ * backend-started automatic export in the repro, since no client action runs there. Once the export completes, the
+ * backend push clears that pending flag (the message flips to "exported to..."), so this naturally returns `false`
+ * again. A "result" event is an `INTEGRATIONS_MESSAGE` action (the export finished or failed on the integration side);
+ * `hasExportError` reads the failed subset of those.
  *
  * We compare by `created` rather than just checking `hasExportError`, because a rejected export returns 200 (its
  * `failureData` never runs) and surfaces later as a separate `INTEGRATIONS_MESSAGE`, which leaves `hasExportError` true.
  * A new export started after that older failure must still lock the button, and a report whose newest event IS the
  * failure must keep the button enabled for retry — preserving the failed-export behavior from #87654 / #72292.
+ *
+ * This only holds once the report's actions are loaded (e.g. the open report). For a user-started export read from a
+ * preview or after a refresh, the report-level `pendingExport` marker in `isExportInProgressFromReport` takes over.
  */
-function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportAction[]): boolean {
+function isExportInProgressFromActions(reportActions: OnyxEntry<ReportActions> | ReportAction[]): boolean {
     if (!reportActions) {
         return false;
     }
@@ -13256,6 +13256,50 @@ function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportActi
     }
 
     return !!latestExportStartedCreated && latestExportStartedCreated > latestExportResultCreated;
+}
+
+/**
+ * Whether a user-started export is in flight based on the report metadata's `pendingExport` marker.
+ *
+ * `exportToIntegration` records this marker in `optimisticData` the moment a manual export fires. It lives on the report
+ * metadata (client-only state, not returned from the server) rather than on the report actions, so it is available in a
+ * preview where the report actions are not loaded, and it survives a refresh. There is no client event meaning "the
+ * export finished" — `Report_Export` returns 200 as soon as the request is accepted, so `failureData` never runs and the
+ * real outcome arrives later over Pusher — so the marker is resolved by comparison at read time against the report's own
+ * outcome fields rather than cleared from a listener. That also means a stale marker can never strand the button: it
+ * clears the moment the server marks the report exported (success) or records a new export error (failure).
+ */
+function isExportInProgressFromMetadata(report: OnyxEntry<Report>, reportMetadata: OnyxEntry<ReportMetadata>): boolean {
+    const pendingExport = reportMetadata?.pendingExport;
+    if (!pendingExport) {
+        return false;
+    }
+
+    // Success: the server has now marked the report exported, and it was not already exported when this attempt started.
+    if ((report?.isExportedToIntegration ?? false) && !pendingExport.wasAlreadyExported) {
+        return false;
+    }
+
+    // Failure: a new `errorFields.export` entry has appeared for this attempt.
+    const currentExportErrorCount = Object.keys(report?.errorFields?.export ?? {}).length;
+    if (currentExportErrorCount > pendingExport.previousExportErrorCount) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Whether an export to an accounting integration is currently in flight for this report.
+ *
+ * Combines two signals so both windows in the issue are covered:
+ * - the pending `EXPORTED_TO_INTEGRATION` action (covers the backend-started automatic export in the repro, and any
+ *   export read while the report's actions are loaded), and
+ * - the report metadata's `pendingExport` marker (covers a user-started export read from a preview or after a refresh,
+ *   where the report actions are not loaded).
+ */
+function isExportInProgress(reportActions: OnyxEntry<ReportActions> | ReportAction[], report?: OnyxEntry<Report>, reportMetadata?: OnyxEntry<ReportMetadata>): boolean {
+    return isExportInProgressFromActions(reportActions) || isExportInProgressFromMetadata(report, reportMetadata);
 }
 
 function doesReportContainRequestsFromMultipleUsers(iouReport: OnyxEntry<Report>, shouldExcludeDeletedTransactions = false): boolean {

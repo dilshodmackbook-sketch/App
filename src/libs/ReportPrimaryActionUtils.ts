@@ -276,7 +276,7 @@ function isPrimaryPayAction({
     return invoiceReceiverPolicy?.role === CONST.POLICY.ROLE.ADMIN && reimbursableSpend > 0;
 }
 
-function isExportAction(report: Report, currentUserLogin: string, policy?: Policy, reportActions?: ReportAction[]) {
+function isExportAction(report: Report, currentUserLogin: string, policy?: Policy, reportActions?: ReportAction[], reportMetadata?: OnyxEntry<ReportMetadata>) {
     if (!policy) {
         return false;
     }
@@ -297,10 +297,14 @@ function isExportAction(report: Report, currentUserLogin: string, policy?: Polic
 
     const syncEnabled = hasIntegrationAutoSync(policy, connectedIntegration);
     const isExported = isExportedUtil(reportActions, report);
-    // Keep the button rendered while an export is in flight so it can show the disabled spinner. `exportToIntegration`
-    // sets `isExportedToIntegration` optimistically the moment a manual export fires, so without this the button would
-    // flip straight to "View" instead of showing the in-progress state.
-    if (isExported && !isExportInProgressUtil(reportActions)) {
+    if (isExported) {
+        return false;
+    }
+
+    // Hide the button entirely while an export is already in flight, so a second export cannot be started. The in-flight
+    // state comes from the pending export action (covers the backend-started automatic export shown in the repro) or the
+    // report metadata's `pendingExport` marker (covers a user-started export read after a refresh).
+    if (isExportInProgressUtil(reportActions, report, reportMetadata)) {
         return false;
     }
 
@@ -565,7 +569,7 @@ function getReportPrimaryAction(params: GetReportPrimaryActionParams): ValueOf<t
         return CONST.REPORT.PRIMARY_ACTIONS.PAY;
     }
 
-    if (isExportAction(report, currentUserLogin, policy, reportActions)) {
+    if (isExportAction(report, currentUserLogin, policy, reportActions, reportMetadata)) {
         return CONST.REPORT.PRIMARY_ACTIONS.EXPORT_TO_ACCOUNTING;
     }
 

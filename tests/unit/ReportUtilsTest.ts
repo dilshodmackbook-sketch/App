@@ -22616,9 +22616,9 @@ describe('isExportInProgress', () => {
         expect(isExportInProgress(reportActions)).toBe(false);
     });
 
-    it('stays true during the optimistic manual export even though isExportedToIntegration is set (suneox: api succeeds, status arrives later)', () => {
-        // `exportToIntegration` sets `isExportedToIntegration` optimistically the instant the export fires, but the started
-        // action is still pending — the button must show the disabled spinner, not flip to "View".
+    it('stays true while the export request is accepted but the status arrives later (api succeeds, status arrives later)', () => {
+        // `Report_Export` returns 200 as soon as the request is accepted; the started action stays pending until the
+        // real status arrives over Pusher, so the button must remain hidden and not flip back to an actionable state.
         const reportActions = [buildStartedAction('2026-08-19 12:45:00.000')];
 
         expect(isExportInProgress(reportActions)).toBe(true);
@@ -22639,5 +22639,49 @@ describe('isExportInProgress', () => {
     it('returns false for empty or missing report actions', () => {
         expect(isExportInProgress([])).toBe(false);
         expect(isExportInProgress(undefined)).toBe(false);
+    });
+
+    describe('report-metadata `pendingExport` marker (preview / after refresh, report actions not loaded)', () => {
+        const inFlightMetadata = createMock<ReportMetadata>({pendingExport: {previousExportErrorCount: 0, wasAlreadyExported: false}});
+
+        it('returns true from the marker alone when the report actions are empty', () => {
+            // This is the preview / cold-load case: `exportToIntegration` wrote the marker but the expense report's
+            // actions are not in Onyx, so the action signal is blind and the marker is what locks the button.
+            const report = createMock<Report>({isExportedToIntegration: false});
+
+            expect(isExportInProgress([], report, inFlightMetadata)).toBe(true);
+        });
+
+        it('resolves to false once the server marks the report exported (success)', () => {
+            const report = createMock<Report>({isExportedToIntegration: true});
+
+            expect(isExportInProgress([], report, inFlightMetadata)).toBe(false);
+        });
+
+        it('resolves to false once a new export error is recorded for this attempt (failure), enabling retry', () => {
+            const report = createMock<Report>({
+                isExportedToIntegration: false,
+                errorFields: {export: {'1787581503741353': 'export failed', '1787608492859716': 'export failed'}},
+            });
+            const metadata = createMock<ReportMetadata>({pendingExport: {previousExportErrorCount: 1, wasAlreadyExported: false}});
+
+            expect(isExportInProgress([], report, metadata)).toBe(false);
+        });
+
+        it('stays true while an older failure is still present but no new error has been recorded for this attempt', () => {
+            const report = createMock<Report>({
+                isExportedToIntegration: false,
+                errorFields: {export: {'1787581503741353': 'export failed'}},
+            });
+            const metadata = createMock<ReportMetadata>({pendingExport: {previousExportErrorCount: 1, wasAlreadyExported: false}});
+
+            expect(isExportInProgress([], report, metadata)).toBe(true);
+        });
+
+        it('returns false when the report metadata carries no `pendingExport` marker', () => {
+            const report = createMock<Report>({isExportedToIntegration: false});
+
+            expect(isExportInProgress([], report, createMock<ReportMetadata>({}))).toBe(false);
+        });
     });
 });

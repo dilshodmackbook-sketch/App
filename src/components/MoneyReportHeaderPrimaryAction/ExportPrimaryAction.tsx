@@ -24,19 +24,20 @@ type ExportPrimaryActionProps = {
 function ExportPrimaryAction({reportID, onExportModalOpen}: ExportPrimaryActionProps) {
     const {translate} = useLocalize();
     const [moneyRequestReport] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT}${reportID}`);
+    const [reportMetadata] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT_METADATA}${reportID}`);
     const [policy] = useOnyx(`${ONYXKEYS.COLLECTION.POLICY}${getNonEmptyStringOnyxID(moneyRequestReport?.policyID)}`);
     const connectedIntegration = getValidConnectedIntegration(policy);
 
     const {reportActions: unfilteredReportActions} = usePaginatedReportActions(moneyRequestReport?.reportID);
     const reportActions = getFilteredReportActionsForReportView(unfilteredReportActions);
     const isExported = isExportedUtils(reportActions, moneyRequestReport);
-    const isExportInProgress = isExportInProgressUtils(reportActions);
+    // Defensive guard: the primary-action gate (`isExportAction`) already hides this button while an export is in
+    // flight, but guarding the press too prevents a duplicate export from any brief race before the gate re-evaluates.
+    const isExportInProgress = isExportInProgressUtils(reportActions, moneyRequestReport, reportMetadata);
 
     return (
         <Button
             variant={CONST.BUTTON_VARIANT.SUCCESS}
-            isLoading={isExportInProgress}
-            isDisabled={isExportInProgress}
             onPress={() => {
                 if (!connectedIntegration || !moneyRequestReport || isExportInProgress) {
                     return;

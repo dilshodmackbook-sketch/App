@@ -6374,9 +6374,9 @@ function setGroupDraft(newGroupDraft: Partial<NewGroupChatDraft>) {
 function exportToIntegration(reportID: string, connectionName: ConnectionName) {
     const action = buildOptimisticExportIntegrationAction(connectionName);
     const optimisticReportActionID = action.reportActionID;
-    const previousExportedValue = allReports?.[`${ONYXKEYS.COLLECTION.REPORT}${reportID}`]?.isExportedToIntegration;
+    const currentReport = allReports?.[`${ONYXKEYS.COLLECTION.REPORT}${reportID}`];
 
-    const optimisticData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT>> = [
+    const optimisticData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT_METADATA>> = [
         {
             onyxMethod: Onyx.METHOD.MERGE,
             key: `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportID}`,
@@ -6386,14 +6386,22 @@ function exportToIntegration(reportID: string, connectionName: ConnectionName) {
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.REPORT}${reportID}`,
+            key: `${ONYXKEYS.COLLECTION.REPORT_METADATA}${reportID}`,
+            // Mark this export as in flight without touching the server-owned `isExportedToIntegration`. That field is
+            // only true once the backend has actually exported; writing it optimistically hid the in-flight window (the
+            // button flipped straight to "View") and never cleared on failure, since `Report_Export` returns 200 and the
+            // real outcome arrives later over Pusher. This client-only marker lives on the report metadata and
+            // `isExportInProgress` resolves it at read time against the report's outcome fields instead.
             value: {
-                isExportedToIntegration: true,
+                pendingExport: {
+                    previousExportErrorCount: Object.keys(currentReport?.errorFields?.export ?? {}).length,
+                    wasAlreadyExported: currentReport?.isExportedToIntegration ?? false,
+                },
             },
         },
     ];
 
-    const failureData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT>> = [
+    const failureData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT_METADATA>> = [
         {
             onyxMethod: Onyx.METHOD.MERGE,
             key: `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportID}`,
@@ -6405,9 +6413,9 @@ function exportToIntegration(reportID: string, connectionName: ConnectionName) {
         },
         {
             onyxMethod: Onyx.METHOD.MERGE,
-            key: `${ONYXKEYS.COLLECTION.REPORT}${reportID}`,
+            key: `${ONYXKEYS.COLLECTION.REPORT_METADATA}${reportID}`,
             value: {
-                isExportedToIntegration: previousExportedValue,
+                pendingExport: null,
             },
         },
     ];
