@@ -1748,6 +1748,28 @@ function getFirstVisibleReportActionID(sortedReportActions: ReportAction[] = [],
 }
 
 /**
+ * Returns the reportActionID of the newest Concierge-authored comment that is eligible to show the
+ * "Was this response useful?" feedback prompt, or `undefined` if there is none.
+ *
+ * `visibleReportActions` must be newest-first (index 0 = latest), so the first match is the newest.
+ *
+ * The membership check against the persisted `reportActions` map is load-bearing: the client splices
+ * synthetic Concierge comments into the visible list — the greeting (`CONCIERGE_GREETING_ACTION_ID`,
+ * inserted at index 0 in the welcome state) and the streaming draft — that satisfy the actor/type gate
+ * but are not real report actions. `toggleEmojiReaction` no-ops on those, so a prompt rendered on them
+ * would have dead buttons. Requiring the action to exist in the persisted map excludes them structurally.
+ */
+function getLatestConciergeFeedbackActionID(visibleReportActions: ReportAction[], reportActions: OnyxEntry<ReportActions>): string | undefined {
+    return visibleReportActions.find(
+        (action) =>
+            isActionOfType(action, CONST.REPORT.ACTIONS.TYPE.ADD_COMMENT) &&
+            action.actorAccountID === CONST.ACCOUNT_ID.CONCIERGE &&
+            !isDeletedAction(action) &&
+            !!reportActions?.[action.reportActionID],
+    )?.reportActionID;
+}
+
+/**
  * @returns The latest report action in the `onyxData` or `null` if one couldn't be found
  */
 function getLatestReportActionFromOnyxData<TKey extends OnyxKey>(onyxData: Array<OnyxUpdate<TKey>> | null): NonNullable<OnyxEntry<ReportAction>> | null {
@@ -4985,6 +5007,7 @@ export {
     getCombinedReportActions,
     getDismissedViolationMessageText,
     getFirstVisibleReportActionID,
+    getLatestConciergeFeedbackActionID,
     getIOUActionForReportID,
     getIOUActionForTransactionID,
     getIOUReportIDFromReportActionPreview,

@@ -6750,4 +6750,69 @@ describe('ReportActionsUtils', () => {
             expect(actual).toBe('changed the "Advertising" category description to not required (previously required)');
         });
     });
+
+    describe('getLatestConciergeFeedbackActionID', () => {
+        const CONCIERGE = CONST.ACCOUNT_ID.CONCIERGE;
+        const USER = 111;
+
+        /** Build a (non-deleted) Concierge-authored comment. `deleted` produces a legacy-deleted comment. */
+        function makeConciergeComment(reportActionID: string, {actorAccountID = CONCIERGE, deleted = false} = {}): ReportAction {
+            return {
+                ...createRandomReportAction(Number(reportActionID) || 0),
+                reportActionID,
+                actionName: CONST.REPORT.ACTIONS.TYPE.ADD_COMMENT,
+                actorAccountID,
+                message: [{type: 'COMMENT', html: deleted ? '' : 'Concierge reply', text: deleted ? '' : 'Concierge reply'}],
+                originalMessage: {html: deleted ? '' : 'Concierge reply', whisperedTo: []},
+            } as ReportAction;
+        }
+
+        /** The synthetic greeting: a Concierge ADD_COMMENT that is NOT a persisted report action. */
+        const greetingAction = makeConciergeComment(String(CONST.CONCIERGE_GREETING_ACTION_ID));
+
+        /** Turn a list of persisted actions into the Onyx reportActions map keyed by reportActionID. */
+        function toPersistedMap(actions: ReportAction[]): Record<string, ReportAction> {
+            return Object.fromEntries(actions.map((action) => [action.reportActionID, action]));
+        }
+
+        it('returns the newest persisted Concierge comment (list is newest-first)', () => {
+            const newer = makeConciergeComment('300');
+            const older = makeConciergeComment('200');
+            const visible = [newer, older];
+            expect(ReportActionsUtils.getLatestConciergeFeedbackActionID(visible, toPersistedMap(visible))).toBe('300');
+        });
+
+        it('excludes the synthetic greeting at index 0 and falls through to the real Concierge comment', () => {
+            const realConcierge = makeConciergeComment('200');
+            // Greeting is spliced in at index 0 (newest slot) but is not in the persisted map.
+            const visible = [greetingAction, realConcierge];
+            const persisted = toPersistedMap([realConcierge]);
+
+            // An actor-only find would wrongly return the greeting; the persisted gate returns the real comment.
+            expect(ReportActionsUtils.getLatestConciergeFeedbackActionID(visible, persisted)).toBe('200');
+            expect(ReportActionsUtils.getLatestConciergeFeedbackActionID(visible, persisted)).not.toBe(String(CONST.CONCIERGE_GREETING_ACTION_ID));
+        });
+
+        it('returns undefined for a greeting-only report (no dead-button prompt on the welcome screen)', () => {
+            const visible = [greetingAction];
+            expect(ReportActionsUtils.getLatestConciergeFeedbackActionID(visible, toPersistedMap([]))).toBeUndefined();
+        });
+
+        it('skips a deleted Concierge comment', () => {
+            const deleted = makeConciergeComment('300', {deleted: true});
+            const older = makeConciergeComment('200');
+            const visible = [deleted, older];
+            expect(ReportActionsUtils.getLatestConciergeFeedbackActionID(visible, toPersistedMap(visible))).toBe('200');
+        });
+
+        it('ignores non-Concierge authors', () => {
+            const userComment = makeConciergeComment('300', {actorAccountID: USER});
+            const visible = [userComment];
+            expect(ReportActionsUtils.getLatestConciergeFeedbackActionID(visible, toPersistedMap(visible))).toBeUndefined();
+        });
+
+        it('returns undefined for an empty list', () => {
+            expect(ReportActionsUtils.getLatestConciergeFeedbackActionID([], undefined)).toBeUndefined();
+        });
+    });
 });

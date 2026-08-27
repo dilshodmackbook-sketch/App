@@ -944,6 +944,7 @@ export type {HeaderIndices, EmojiPickerList, EmojiPickerListItem};
 
 export {
     findEmojiByCode,
+    findEmojiByName,
     getLocalizedEmojiName,
     getProcessedText,
     getHeaderEmojis,

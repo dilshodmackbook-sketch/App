@@ -21,6 +21,7 @@ import type {PlatformStackRouteProp} from '@libs/Navigation/PlatformStackNavigat
 import TransitionTracker from '@libs/Navigation/TransitionTracker';
 import {
     getFirstVisibleReportActionID,
+    getLatestConciergeFeedbackActionID,
     getReportActionHtml,
     getReportActionMessage,
     isConsecutiveActionMadeByPreviousActor,
@@ -165,6 +166,9 @@ function ReportActionsListContent({reportID, onLayout}: ReportActionsListContent
     });
     const isHarvestCreatedExpenseReportAction = isHarvestCreatedExpenseReport(reportNameValuePairs?.origin, reportNameValuePairs?.originalID);
 
+    // Persisted report actions map — used to confirm a Concierge action is a real (reactable) report action
+    // before the feedback prompt is shown on it, so synthetic greeting/draft actions are excluded.
+    const [reportActionsForFeedback] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportID}`);
     const [reportStable] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT}${reportID}`, {selector: getStableReportSelector});
     const [chatReportStable] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT}${getNonEmptyStringOnyxID(reportStable?.chatReportID)}`, {selector: getStableReportSelector});
 
@@ -321,6 +325,11 @@ function ReportActionsListContent({reportID, onLayout}: ReportActionsListContent
 
     const firstVisibleReportActionID = getFirstVisibleReportActionID(sortedReportActions, isOffline);
 
+    // The newest persisted Concierge comment eligible for the "Was this response useful?" prompt. Skipped
+    // while a synthetic draft is streaming so the prompt never lands on a stale answer, and computed against
+    // the persisted map so the greeting/draft (spliced into the visible list but not persisted) are excluded.
+    const latestConciergeFeedbackActionID = isSyntheticDraftVisible ? undefined : getLatestConciergeFeedbackActionID(renderedVisibleReportActions, reportActionsForFeedback);
+
     useFollowActionBadgeTarget({
         isProduction,
         reportID,
@@ -375,6 +384,7 @@ function ReportActionsListContent({reportID, onLayout}: ReportActionsListContent
                     shouldDisplayNewMarker={reportAction.reportActionID === unreadMarkerReportActionID}
                     shouldDisplayReplyDivider={renderedVisibleReportActions.length > 1}
                     isFirstVisibleReportAction={firstVisibleReportActionID === reportAction.reportActionID}
+                    isLatestConciergeAction={!!latestConciergeFeedbackActionID && latestConciergeFeedbackActionID === reportAction.reportActionID}
                     shouldUseThreadDividerLine={shouldUseThreadDividerLine}
                     isHarvestCreatedExpenseReport={isHarvestCreatedExpenseReportAction}
                     shouldDisableContextMenuForConciergeDraft={shouldDisableContextMenuForConciergeDraft}

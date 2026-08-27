@@ -134,6 +134,9 @@ type ActionContentRouterProps = {
     /** Whether the search-page UI is active */
     isOnSearch: boolean;
 
+    /** Whether this is the latest Concierge-authored action eligible for the feedback prompt */
+    isLatestConciergeAction?: boolean;
+
     /** Toggle whether the payment method popover is active */
     setIsPaymentMethodPopoverActive: (value: boolean) => void;
 
@@ -158,6 +161,7 @@ function ActionContentRouter({
     isHarvestCreatedExpenseReport,
     shouldShowBorder,
     isOnSearch,
+    isLatestConciergeAction,
     setIsPaymentMethodPopoverActive,
     isTrackIntentUser,
 }: ActionContentRouterProps): React.JSX.Element | null {
@@ -543,6 +547,7 @@ function ActionContentRouter({
             isHidden={isHidden}
             updateHiddenState={updateHiddenState}
             isOnSearch={isOnSearch}
+            isLatestConciergeAction={isLatestConciergeAction}
         />
     );
 }

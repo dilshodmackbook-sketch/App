@@ -139,6 +139,9 @@ type ReportActionItemProps = {
     /** If this is the first visible report action */
     isFirstVisibleReportAction: boolean;
 
+    /** Whether this is the latest Concierge-authored action eligible for the feedback prompt */
+    isLatestConciergeAction?: boolean;
+
     /**
      * Is the action a thread's parent reportAction viewed from within the thread report?
      * It will be false if we're viewing the same parent report action from the report it belongs to rather than the thread.
@@ -176,6 +179,7 @@ function ReportActionItem({
     shouldHideThreadDividerLine = false,
     onPress = undefined,
     isFirstVisibleReportAction = false,
+    isLatestConciergeAction = false,
     isThreadReportParentAction = false,
     shouldUseThreadDividerLine = false,
     shouldDisplayContextMenu = true,
@@ -644,6 +648,7 @@ function ReportActionItem({
                                                                 isHarvestCreatedExpenseReport={isHarvestCreatedExpenseReport}
                                                                 shouldShowBorder={shouldShowBorder}
                                                                 isOnSearch={isOnSearch}
+                                                                isLatestConciergeAction={isLatestConciergeAction}
                                                                 setIsPaymentMethodPopoverActive={setIsPaymentMethodPopoverActive}
                                                             />
                                                             {Permissions.canUseLinkPreviews() && !isHidden && (action.linkMetadata?.length ?? 0) > 0 && (
