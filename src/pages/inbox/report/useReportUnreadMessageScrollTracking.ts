@@ -60,6 +60,9 @@ export default function useReportUnreadMessageScrollTracking({
         isFocused: boolean;
         onUnreadActionVisible: () => void;
         actionBadgeTargetIndex: number;
+        shouldBeAlignedToTop: boolean;
+        shouldDisablePillTracking: boolean;
+        hasNewerActions: boolean;
     }>({
         reportID,
         unreadMarkerReportActionIndex,
@@ -67,6 +70,9 @@ export default function useReportUnreadMessageScrollTracking({
         isFocused: true,
         onUnreadActionVisible,
         actionBadgeTargetIndex,
+        shouldBeAlignedToTop,
+        shouldDisablePillTracking,
+        hasNewerActions,
     });
     // We want to save the updated value on ref to use it in onViewableItemsChanged
     // because FlatList requires the callback to be stable and we cannot add a dependency on the useCallback.
@@ -83,11 +89,36 @@ export default function useReportUnreadMessageScrollTracking({
         ref.current.onUnreadActionVisible = onUnreadActionVisible;
     }, [onUnreadActionVisible]);
 
+    // Keep the values onViewableItemsChanged reads from the ref in sync, since that callback is memoized
+    // with an empty dependency array and cannot close over the latest props.
+    useEffect(() => {
+        ref.current.shouldBeAlignedToTop = shouldBeAlignedToTop;
+        ref.current.shouldDisablePillTracking = shouldDisablePillTracking;
+        ref.current.hasNewerActions = hasNewerActions;
+    }, [shouldBeAlignedToTop, shouldDisablePillTracking, hasNewerActions]);
+
     /**
      * Show/hide the latest message pill when user is scrolling back/forth in the history of messages.
      */
     const updatePillVisibility = () => {
         const hasUnreadMarkerReportAction = unreadMarkerReportActionIndex !== -1;
+
+        // Inverted read chat (no unread marker): the pill tracks whether the newest action is out of view.
+        // The newest action is index 0 in the inverted list, so recompute from the last viewable items — the
+        // same device-independent signal onViewableItemsChanged uses. Recomputing here means onLoad's
+        // post-positioning refresh (after a deep link settles) still updates the pill.
+        if (isInverted && !hasUnreadMarkerReportAction) {
+            if (shouldBeAlignedToTop) {
+                return;
+            }
+            const viewableIndexes = ref.current.previousViewableItems.map((viewableItem) => viewableItem.index).filter((value) => typeof value === 'number');
+            if (viewableIndexes.length === 0) {
+                return;
+            }
+            const isNewestActionVisible = viewableIndexes.includes(0) && !hasNewerActions;
+            setIsFloatingMessageCounterVisible(!isNewestActionVisible);
+            return;
+        }
 
         // display floating button if we're scrolled more than the offset
         if (
@@ -144,6 +175,16 @@ export default function useReportUnreadMessageScrollTracking({
         const unreadActionIndex = ref.current.unreadMarkerReportActionIndex;
         const hasUnreadMarkerReportAction = unreadActionIndex !== -1;
         const unreadActionVisible = isInverted ? unreadActionIndex >= minIndex : unreadActionIndex <= maxIndex;
+
+        // Inverted read chat (no unread marker): show the "Latest messages" pill exactly when the newest
+        // action (index 0 in the inverted list) scrolls out of view. This keys off viewability, already
+        // delivered here, instead of a raw contentOffset.y pixel threshold that most chats never reach.
+        // shouldDisablePillTracking suppresses this during initial linked-message positioning; onLoad then
+        // refreshes the pill via updatePillVisibility once positioning settles.
+        if (isInverted && !hasUnreadMarkerReportAction && !ref.current.shouldBeAlignedToTop && !ref.current.shouldDisablePillTracking) {
+            const isNewestActionVisible = viewableIndexes.includes(0) && !ref.current.hasNewerActions;
+            setIsFloatingMessageCounterVisible(!isNewestActionVisible);
+        }
 
         // display floating button if the unread report action is out of view
         if (!unreadActionVisible && hasUnreadMarkerReportAction) {

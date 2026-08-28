@@ -78,15 +78,15 @@ describe('useReportUnreadMessageScrollTracking', () => {
     describe('when scrolling', () => {
         const onTrackScrollingMockFn = jest.fn();
 
-        it('returns floatingMessage visibility as true when scrolling outside of threshold', () => {
-            // Given
+        it('returns floatingMessage visibility as true when scrolling outside of threshold (non-inverted list)', () => {
+            // Given a non-inverted list (e.g. MoneyRequestReportActionsList), which still uses the pixel threshold
             const offsetRef = {current: 0};
             const {result, rerender} = renderHook(() =>
                 useReportUnreadMessageScrollTracking({
                     reportID,
                     currentVerticalScrollingOffsetRef: offsetRef,
                     onUnreadActionVisible: onUnreadActionVisibleMockFn,
-                    isInverted: true,
+                    isInverted: false,
                     unreadMarkerReportActionIndex: -1,
                     onTrackScrolling: onTrackScrollingMockFn,
                     hasNewerActions: false,
@@ -137,8 +137,8 @@ describe('useReportUnreadMessageScrollTracking', () => {
             expect(onTrackScrollingMockFn).toHaveBeenCalledWith(emptyScrollEventMock);
         });
 
-        it('returns floatingMessage visibility as false when scrolling inside the threshold', () => {
-            // Given
+        it('returns floatingMessage visibility as false when scrolling inside the threshold (non-inverted list)', () => {
+            // Given a non-inverted list, which still uses the pixel threshold
             const offsetRef = {current: 0};
             const {result} = renderHook(() =>
                 useReportUnreadMessageScrollTracking({
@@ -146,7 +146,7 @@ describe('useReportUnreadMessageScrollTracking', () => {
                     currentVerticalScrollingOffsetRef: offsetRef,
                     onUnreadActionVisible: onUnreadActionVisibleMockFn,
                     unreadMarkerReportActionIndex: -1,
-                    isInverted: true,
+                    isInverted: false,
                     hasNewerActions: false,
                     onTrackScrolling: onTrackScrollingMockFn,
                 }),
@@ -225,6 +225,123 @@ describe('useReportUnreadMessageScrollTracking', () => {
 
             // Then
             expect(onUnreadActionVisibleLocalMockFn).toHaveBeenCalledTimes(1);
+            expect(result.current.isFloatingMessageCounterVisible).toBe(false);
+        });
+    });
+
+    describe('inverted read chat (no unread marker) drives the pill from the newest action visibility', () => {
+        const onTrackScrollingMockFn = jest.fn();
+
+        it('shows the pill when the newest action (index 0) is scrolled out of view', () => {
+            // Given a read chat with a short scroll range (offset never reaches the 2000px threshold)
+            const offsetRef = {current: 600};
+            const {result} = renderHook(() =>
+                useReportUnreadMessageScrollTracking({
+                    reportID,
+                    currentVerticalScrollingOffsetRef: offsetRef,
+                    onUnreadActionVisible: onUnreadActionVisibleMockFn,
+                    unreadMarkerReportActionIndex: -1,
+                    isInverted: true,
+                    hasNewerActions: false,
+                    onTrackScrolling: onTrackScrollingMockFn,
+                }),
+            );
+
+            // When the user scrolls up so the newest action (index 0) is no longer viewable
+            act(() => {
+                result.current.onViewableItemsChanged({
+                    viewableItems: [
+                        {index: 3, key: 'reportActions_3', isViewable: true, item: {}},
+                        {index: 4, key: 'reportActions_4', isViewable: true, item: {}},
+                    ],
+                    changed: [],
+                });
+            });
+
+            // Then the "Latest messages" pill is shown, even though the offset (600) never crosses 2000
+            expect(result.current.isFloatingMessageCounterVisible).toBe(true);
+        });
+
+        it('hides the pill when the newest action (index 0) is visible', () => {
+            // Given the pill is currently shown
+            const offsetRef = {current: 600};
+            const {result} = renderHook(() =>
+                useReportUnreadMessageScrollTracking({
+                    reportID,
+                    currentVerticalScrollingOffsetRef: offsetRef,
+                    onUnreadActionVisible: onUnreadActionVisibleMockFn,
+                    unreadMarkerReportActionIndex: -1,
+                    isInverted: true,
+                    hasNewerActions: false,
+                    onTrackScrolling: onTrackScrollingMockFn,
+                }),
+            );
+            act(() => {
+                result.current.onViewableItemsChanged({viewableItems: [{index: 3, key: 'reportActions_3', isViewable: true, item: {}}], changed: []});
+            });
+            expect(result.current.isFloatingMessageCounterVisible).toBe(true);
+
+            // When the user scrolls back so the newest action (index 0) is visible again
+            act(() => {
+                result.current.onViewableItemsChanged({
+                    viewableItems: [
+                        {index: 0, key: 'reportActions_0', isViewable: true, item: {}},
+                        {index: 1, key: 'reportActions_1', isViewable: true, item: {}},
+                    ],
+                    changed: [],
+                });
+            });
+
+            // Then the pill is hidden
+            expect(result.current.isFloatingMessageCounterVisible).toBe(false);
+        });
+
+        it('keeps the pill shown while index 0 is visible but newer actions are still unloaded', () => {
+            // Given a read chat that still has newer actions to load (index 0 is not the true newest)
+            const offsetRef = {current: 0};
+            const {result} = renderHook(() =>
+                useReportUnreadMessageScrollTracking({
+                    reportID,
+                    currentVerticalScrollingOffsetRef: offsetRef,
+                    onUnreadActionVisible: onUnreadActionVisibleMockFn,
+                    unreadMarkerReportActionIndex: -1,
+                    isInverted: true,
+                    hasNewerActions: true,
+                    onTrackScrolling: onTrackScrollingMockFn,
+                }),
+            );
+
+            // When index 0 of the loaded window is visible but there are newer actions above it
+            act(() => {
+                result.current.onViewableItemsChanged({viewableItems: [{index: 0, key: 'reportActions_0', isViewable: true, item: {}}], changed: []});
+            });
+
+            // Then the pill stays shown, because the user is not at the true newest action
+            expect(result.current.isFloatingMessageCounterVisible).toBe(true);
+        });
+
+        it('never shows the pill for an aligned-to-top report', () => {
+            // Given an aligned-to-top report (transaction thread / expense report)
+            const offsetRef = {current: 600};
+            const {result} = renderHook(() =>
+                useReportUnreadMessageScrollTracking({
+                    reportID,
+                    currentVerticalScrollingOffsetRef: offsetRef,
+                    onUnreadActionVisible: onUnreadActionVisibleMockFn,
+                    unreadMarkerReportActionIndex: -1,
+                    isInverted: true,
+                    hasNewerActions: false,
+                    onTrackScrolling: onTrackScrollingMockFn,
+                    shouldBeAlignedToTop: true,
+                }),
+            );
+
+            // When the newest action is out of view
+            act(() => {
+                result.current.onViewableItemsChanged({viewableItems: [{index: 3, key: 'reportActions_3', isViewable: true, item: {}}], changed: []});
+            });
+
+            // Then the pill stays hidden
             expect(result.current.isFloatingMessageCounterVisible).toBe(false);
         });
     });
