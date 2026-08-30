@@ -527,4 +527,77 @@ describe('ReportActionMessageEdit layout and draft (narrow vs wide)', () => {
         });
         expect(screen.queryByTestId(testIds.EDITING_MESSAGE_ACTION_ROW)).toBeNull();
     });
+
+    it('flushes the in-progress edit draft on unmount when clearing then navigating away before the debounce fires (narrow, fixes #98674)', async () => {
+        await seedReportAndActions();
+        await setReportActionDraftWithMessage('Original message');
+        await waitForBatchedUpdatesWithAct();
+
+        const {unmount} = renderNarrowMessageCompose();
+        await waitForBatchedUpdatesWithAct();
+
+        const mainRoot = screen.getByTestId(testIds.REPORT_ACTION_COMPOSE);
+        const composer = within(mainRoot).getByTestId(CONST.COMPOSER.NATIVE_ID);
+        expect(screen.getByTestId(testIds.EDITING_MESSAGE_ACTION_ROW)).toBeOnTheScreen();
+        expect(composer.props.value).toBe('Original message');
+
+        // Clear the input, then navigate away (unmount) BEFORE the 1s debounce fires.
+        fireEvent.changeText(composer, '');
+        await act(async () => {
+            jest.advanceTimersByTime(CONST.TIMING.DRAFT_SAVE_DEBOUNCE_TIME - 1);
+        });
+        unmount();
+        await waitForBatchedUpdatesWithAct();
+
+        // With flush-on-unmount the cleared value reaches Onyx; on main the pending write is cancelled and the
+        // stale original text stays, which is the bug (it reappears on return).
+        expect(await getReportActionDraftMessage(defaultReport.reportID, commentAction.reportActionID)).toBe('');
+    });
+
+    it('flushes a non-empty in-progress edit on unmount too (narrow, fixes #98674)', async () => {
+        await seedReportAndActions();
+        await setReportActionDraftWithMessage('Original message');
+        await waitForBatchedUpdatesWithAct();
+
+        const {unmount} = renderNarrowMessageCompose();
+        await waitForBatchedUpdatesWithAct();
+
+        const mainRoot = screen.getByTestId(testIds.REPORT_ACTION_COMPOSE);
+        const composer = within(mainRoot).getByTestId(CONST.COMPOSER.NATIVE_ID);
+        expect(composer.props.value).toBe('Original message');
+
+        fireEvent.changeText(composer, 'Original message edited');
+        await act(async () => {
+            jest.advanceTimersByTime(CONST.TIMING.DRAFT_SAVE_DEBOUNCE_TIME - 1);
+        });
+        unmount();
+        await waitForBatchedUpdatesWithAct();
+
+        expect(await getReportActionDraftMessage(defaultReport.reportID, commentAction.reportActionID)).toBe('Original message edited');
+    });
+
+    it('does not resurrect a draft when Cancel is pressed before the debounce, then the composer unmounts (narrow, protects #95471/#98580)', async () => {
+        await seedReportAndActions();
+        await setReportActionDraftWithMessage('Cancel me');
+        await waitForBatchedUpdatesWithAct();
+
+        const {unmount} = renderNarrowMessageCompose();
+        await waitForBatchedUpdatesWithAct();
+
+        const mainRoot = screen.getByTestId(testIds.REPORT_ACTION_COMPOSE);
+        const composer = within(mainRoot).getByTestId(CONST.COMPOSER.NATIVE_ID);
+        fireEvent.changeText(composer, 'Cancel me edited');
+
+        // Cancel within the debounce window: the session-boundary cancel must neutralize the pending save so a
+        // later unmount flush cannot re-write the stale edit after the draft is cleared.
+        fireEvent.press(screen.getByTestId(testIds.MESSAGE_EDIT_CANCEL_MAIN_COMPOSER));
+        await waitForBatchedUpdatesWithAct();
+        await act(async () => {
+            jest.advanceTimersByTime(CONST.TIMING.DRAFT_SAVE_DEBOUNCE_TIME + 1);
+        });
+        unmount();
+        await waitForBatchedUpdatesWithAct();
+
+        expect(await getReportActionDraftMessage(defaultReport.reportID, commentAction.reportActionID)).toBeUndefined();
+    });
 });

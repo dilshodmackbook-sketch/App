@@ -286,7 +286,14 @@ function ComposerWithSuggestions({
     });
 
     // Save the draft of the report action. This debounced so that we're not ceaselessly saving your edit.
-    const {saveDraft: debouncedSaveReportActionDraft, isSavePending: isDraftSavePending, cancelSaveDraft: cancelSaveReportActionDraft} = useDebouncedSaveDraft(saveReportActionDraft);
+    // Flush on unmount so that clearing (or editing) the message and navigating away before the debounce fires still
+    // persists the latest draft to Onyx instead of cancelling it and restoring stale text on return (see #98674). The
+    // session-boundary cancels below neutralize the pending write on Save/Cancel/target switch, so the flush is safe.
+    const {
+        saveDraft: debouncedSaveReportActionDraft,
+        isSavePending: isDraftSavePending,
+        cancelSaveDraft: cancelSaveReportActionDraft,
+    } = useDebouncedSaveDraft(saveReportActionDraft, undefined, true);
 
     // Save the draft of the report comment. This debounced so that we're not ceaselessly saving your edit. Saving the draft
     // allows one to navigate somewhere else and come back to the comment and still have it in edit mode.
