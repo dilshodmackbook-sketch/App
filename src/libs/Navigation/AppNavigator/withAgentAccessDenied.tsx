@@ -77,6 +77,15 @@ function withAgentAccessDenied(getComponent: () => React.ComponentType): () => R
                     return null;
                 }
                 if (isAgent === true) {
+                    // The blocking view must only paint on the focused (visible) screen. When this guarded screen is
+                    // an agent but is NOT focused, it is either dismissing (the agent-edit RHP the owner tapped
+                    // "Copilot into account" from, still mounted for its exit animation while the central pane has
+                    // already forceReplaced to Profile) or a background pane behind the redirect target. The
+                    // focus-independent effect above already drives the redirect for those cases, so there is nothing
+                    // to show here - rendering FullPageNotFoundView would paint the "Not so fast..." flash instead.
+                    if (!isFocused) {
+                        return null;
+                    }
                     return (
                         <FullPageNotFoundView
                             shouldShow
