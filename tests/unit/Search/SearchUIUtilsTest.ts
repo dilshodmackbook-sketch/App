@@ -12810,3 +12810,45 @@ describe('getSavedSearchIconName', () => {
         spy.mockRestore();
     });
 });
+
+describe('SearchUIUtils Exported / Exported To columns - live actions fallback', () => {
+    it('populates Exported and Exported To from the live reportActions param even when the export action is absent from `data` (parity with Submitted/Approved)', () => {
+        // On a to-do search (e.g. Ready to Pay) the rows are rebuilt from live Onyx and the server snapshot's
+        // report actions are discarded, so a report's EXPORTED_TO_INTEGRATION action lives only in the live
+        // `reportActions_*` collection, never in the search `data`. The Exported / Exported To columns must read
+        // that live source the same way Submitted / Approved already do (getLiveOrSnapshotReportActions), otherwise
+        // they render blank even though the report was exported.
+        const exportedCreated = '2025-01-15 10:00:00';
+        const exportAction = createMock<OnyxTypes.ReportAction>({
+            reportActionID: 'exportAction1',
+            reportID,
+            actionName: CONST.REPORT.ACTIONS.TYPE.EXPORTED_TO_INTEGRATION,
+            created: exportedCreated,
+            actorAccountID: adminAccountID,
+            originalMessage: {label: 'NetSuite', lastModified: exportedCreated},
+        });
+
+        // `searchResults.data` carries only comment actions for this report - no export action - reproducing the
+        // to-do case where classifyAndPreprocess's snapshot-derived maps stay empty for the row.
+        const [sections] = SearchUIUtils.getSections({
+            dateFnsLocale: undefined,
+            type: CONST.SEARCH.DATA_TYPES.EXPENSE_REPORT,
+            data: searchResults.data,
+            currentAccountID: adminAccountID,
+            currentUserEmail: adminEmail,
+            translate: translateLocal,
+            formatPhoneNumber,
+            bankAccountList: {},
+            reportActions: {[`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportID}`]: [exportAction]},
+            conciergeReportID: undefined,
+            convertToDisplayString,
+            reportAttributesDerivedValue: undefined,
+        });
+
+        const reportSection = sections.filter(SearchUIUtils.isTransactionReportGroupListItemType).find((item) => item.reportID === reportID);
+
+        // Before the fix these both fall back to '' because the columns are sourced only from the snapshot maps.
+        expect(reportSection?.exported).toBe(exportedCreated);
+        expect(reportSection?.exportedTo).toBe('NetSuite');
+    });
+});

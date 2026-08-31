@@ -150,10 +150,15 @@ function ExpenseReportListItemInner<TItem extends ListItem>({
         return (searchData?.[`${ONYXKEYS.COLLECTION.POLICY}${reportItem.policyID}`] ?? {}) as Policy;
     }, [searchData, reportItem.policyID]);
 
+    // Prefer the report's own live actions (with the snapshot as a fallback) so columns derived from actions —
+    // most notably the Exported To integration icons — stay populated on to-do searches, where the snapshot's
+    // actions are discarded and only live Onyx carries them. Mirrors getLiveOrSnapshotReportActions in SearchUIUtils.
+    const [liveReportActions] = originalUseOnyx(`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${getNonEmptyStringOnyxID(reportItem.reportID)}`);
+
     const reportActions = useMemo(() => {
-        const actionsData = searchData?.[`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportItem.reportID}`];
+        const actionsData = liveReportActions ?? searchData?.[`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportItem.reportID}`];
         return actionsData ? Object.values(actionsData) : [];
-    }, [searchData, reportItem.reportID]);
+    }, [liveReportActions, searchData, reportItem.reportID]);
 
     const liveReportItem = useLiveRowCapabilities<ExpenseReportListItemType>({
         item: reportItem,

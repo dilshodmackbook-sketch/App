@@ -1484,17 +1484,57 @@ function getExportedToNameForAction(action: OnyxTypes.ReportAction): string {
 
 /**
  * @private
- * Builds the "Exported to" sort value of a report: every destination it was exported to, sorted alphabetically and
- * joined. The backend sorts this column by export name, so we sort on the names too instead of only on whether the
- * report was exported. Using every destination (not just the latest export) keeps reports that were exported to the
- * same set of destinations, and therefore show the same icons, next to each other.
+ * Sorts a set of export destination names alphabetically and joins them, matching how the backend sorts the
+ * "Exported to" column by export name. Using every destination (not just the latest export) keeps reports that were
+ * exported to the same set of destinations, and therefore show the same icons, next to each other.
  */
-function getExportedToSortValue(exportedToNamesByReportID: Map<string, Set<string>>, reportID?: string): string {
-    const names = reportID ? exportedToNamesByReportID.get(reportID) : undefined;
-    if (!names) {
+function sortExportedToNames(names: Set<string> | undefined): string {
+    if (!names || names.size === 0) {
         return '';
     }
     return Array.from(names).sort().join(', ');
+}
+
+/**
+ * @private
+ * Builds the "Exported to" sort value of a report from the snapshot-derived map.
+ */
+function getExportedToSortValue(exportedToNamesByReportID: Map<string, Set<string>>, reportID?: string): string {
+    return sortExportedToNames(reportID ? exportedToNamesByReportID.get(reportID) : undefined);
+}
+
+/**
+ * @private
+ * Derives the last-exported action and the set of export destinations from a report's live actions, mirroring how
+ * `getApprovedDate`/`getSubmittedDate` read the live `actions` array. The Exported / Exported To columns otherwise
+ * come only from the maps `classifyAndPreprocess(data)` builds by scanning the `reportActions_*` keys inside `data`,
+ * which stay empty for a to-do report whose export action was never loaded into `data`. Reading the live actions
+ * first (with the snapshot map kept as the fallback) gives these two columns the same live source their sibling
+ * columns already have.
+ */
+function getExportedInfoFromActions(actions: OnyxTypes.ReportAction[]): {lastExported: OnyxTypes.ReportAction | undefined; names: Set<string>} {
+    let lastExported: OnyxTypes.ReportAction | undefined;
+    let latestTime = -Infinity;
+    const names = new Set<string>();
+
+    for (const action of actions) {
+        if (action.actionName !== CONST.REPORT.ACTIONS.TYPE.EXPORTED_TO_CSV && action.actionName !== CONST.REPORT.ACTIONS.TYPE.EXPORTED_TO_INTEGRATION) {
+            continue;
+        }
+
+        const currentTime = new Date(action.created).getTime();
+        if (currentTime > latestTime) {
+            latestTime = currentTime;
+            lastExported = action;
+        }
+
+        const name = getExportedToNameForAction(action);
+        if (name) {
+            names.add(name);
+        }
+    }
+
+    return {lastExported, names};
 }
 
 /**
@@ -3086,6 +3126,7 @@ function getReportSections({
             const transactions = reportIDToTransactions[reportKey]?.transactions ?? [];
             const isIOUReport = reportItem.type === CONST.REPORT.TYPE.IOU;
             const actions = getLiveOrSnapshotReportActions(reportActions, data, reportItem.reportID);
+            const liveExportedInfo = getExportedInfoFromActions(actions);
 
             const isActionLoading = !!isActionLoadingSet?.has(`${ONYXKEYS.COLLECTION.RAM_ONLY_REPORT_LOADING_STATE}${reportItem.reportID}`);
             const shouldShow = isActionLoading || isEligibleForStatus(currentQueryJSON, reportItem);
@@ -3155,10 +3196,10 @@ function getReportSections({
                     groupedBy: CONST.SEARCH.DATA_TYPES.EXPENSE_REPORT,
                     from: (fromDetails ?? emptyPersonalDetails) as OnyxTypes.PersonalDetails,
                     to: (toDetails ?? emptyPersonalDetails) as OnyxTypes.PersonalDetails,
-                    exported: lastExportedActionByReportID.get(reportItem.reportID)?.created ?? '',
+                    exported: (liveExportedInfo.lastExported ?? lastExportedActionByReportID.get(reportItem.reportID))?.created ?? '',
                     submitted: getSubmittedDate(reportItem, actions),
                     approved: getApprovedDate(reportItem, actions),
-                    exportedTo: getExportedToSortValue(exportedToNamesByReportID, reportItem.reportID),
+                    exportedTo: sortExportedToNames(liveExportedInfo.names) || getExportedToSortValue(exportedToNamesByReportID, reportItem.reportID),
                     firstApproved,
                     firstApproverAvatar: firstApproverDetails?.avatar,
                     firstApproverAccountID,
