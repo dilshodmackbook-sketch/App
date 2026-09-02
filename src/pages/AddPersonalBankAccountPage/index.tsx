@@ -7,17 +7,19 @@ import useOnyx from '@hooks/useOnyx';
 import useShouldCollectInternationalDepositDetails from '@hooks/useShouldCollectInternationalDepositDetails';
 import useSubPage from '@hooks/useSubPage';
 import type {SubPageProps} from '@hooks/useSubPage/types';
+import useThemeStyles from '@hooks/useThemeStyles';
 
 import {getLatestErrorMessage} from '@libs/ErrorUtils';
 import {formatE164PhoneNumber} from '@libs/LoginUtils';
 import getActiveTabName from '@libs/Navigation/helpers/getActiveTabName';
 import {isFullScreenName} from '@libs/Navigation/helpers/isNavigatorName';
+import {formatPaymentMethods} from '@libs/PaymentUtils';
 import {getCurrentAddress, getStreetLines} from '@libs/PersonalDetailsUtils';
 
 import Navigation, {navigationRef} from '@navigation/Navigation';
 
 import {addPersonalBankAccount, clearPersonalBankAccount} from '@userActions/BankAccounts';
-import {continueSetup} from '@userActions/PaymentMethods';
+import {continueSetup, makeDefaultPaymentMethod} from '@userActions/PaymentMethods';
 
 import CONST from '@src/CONST';
 import NAVIGATORS from '@src/NAVIGATORS';
@@ -58,12 +60,17 @@ const ACCOUNT_OWNERSHIP_ERROR_SUBSTRING = 'account ownership';
 
 function AddPersonalBankAccountPage() {
     const {translate} = useLocalize();
+    const styles = useThemeStyles();
     const route = useRoute();
     const urlSubPage = (route.params as {subPage?: string} | undefined)?.subPage;
 
     const [privatePersonalDetails] = useOnyx(ONYXKEYS.PRIVATE_PERSONAL_DETAILS);
     const [personalBankAccount] = useOnyx(ONYXKEYS.FORMS.PERSONAL_BANK_ACCOUNT_FORM_DRAFT);
     const [fullPersonalBankAccount] = useOnyx(ONYXKEYS.PERSONAL_BANK_ACCOUNT);
+    const [bankAccountList] = useOnyx(ONYXKEYS.BANK_ACCOUNT_LIST);
+    const [fundList] = useOnyx(ONYXKEYS.FUND_LIST);
+    const [userWallet] = useOnyx(ONYXKEYS.USER_WALLET);
+    const hasSetAddedAccountAsDefault = useRef(false);
     const isManual = personalBankAccount?.setupType === CONST.BANK_ACCOUNT.SETUP_TYPE.MANUAL || urlSubPage === SUB_PAGE_NAMES.MANUAL_BANK_ACCOUNT_DETAILS;
     const error = getLatestErrorMessage(fullPersonalBankAccount ?? DEFAULT_OBJECT);
     const confirmedOwnershipDetails = useRef(false);
@@ -205,6 +212,42 @@ function AddPersonalBankAccountPage() {
         }
         moveTo(successIndex, false);
     }, [shouldShowSuccess, currentPageName, moveTo, successIndex]);
+
+    // The backend makes a brand-new personal bank account the wallet default, but when it reactivates a previously
+    // deleted account it does not re-point the wallet default. So after the account the user just added has synced into
+    // the list, set it as the default explicitly so the Default badge follows it in both cases (see issue #95662).
+    useEffect(() => {
+        if (!shouldShowSuccess || hasSetAddedAccountAsDefault.current) {
+            return;
+        }
+        const openPersonalAccounts = Object.values(bankAccountList ?? {}).filter(
+            (account) =>
+                account?.accountType === CONST.PAYMENT_METHODS.PERSONAL_BANK_ACCOUNT &&
+                account?.accountData?.type !== CONST.BANK_ACCOUNT.TYPE.BUSINESS &&
+                account?.accountData?.state === CONST.BANK_ACCOUNT.STATE.OPEN &&
+                account?.pendingAction !== CONST.RED_BRICK_ROAD_PENDING_ACTION.DELETE,
+        );
+        const addedPlaidAccountID = fullPersonalBankAccount?.plaidAccountID;
+        const addedAccount =
+            (addedPlaidAccountID ? openPersonalAccounts.find((account) => account?.accountData?.plaidAccountID === addedPlaidAccountID) : undefined) ??
+            openPersonalAccounts
+                .slice()
+                .sort((a, b) => new Date(b?.accountData?.created ?? 0).getTime() - new Date(a?.accountData?.created ?? 0).getTime())
+                .at(0);
+        const newBankAccountID = addedAccount?.accountData?.bankAccountID;
+        if (!newBankAccountID) {
+            // The added account has not synced into the bank account list yet; wait for the next update.
+            return;
+        }
+        hasSetAddedAccountAsDefault.current = true;
+        if (userWallet?.walletLinkedAccountID === newBankAccountID) {
+            return;
+        }
+        const paymentMethods = formatPaymentMethods(bankAccountList ?? {}, fundList ?? {}, styles, translate);
+        const previousDefault = paymentMethods.find((method) => method.methodID === userWallet?.walletLinkedAccountID);
+        const addedMethod = paymentMethods.find((method) => method.methodID === newBankAccountID);
+        makeDefaultPaymentMethod(newBankAccountID, 0, previousDefault, addedMethod);
+    }, [shouldShowSuccess, bankAccountList, fundList, fullPersonalBankAccount?.plaidAccountID, userWallet?.walletLinkedAccountID, styles, translate]);
 
     useEffect(() => {
         if (!error) {
