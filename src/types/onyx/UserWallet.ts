@@ -42,6 +42,12 @@ type UserWallet = {
     /** The ID of the linked account */
     walletLinkedAccountID: number;
 
+    /**
+     * Whether the linked account was chosen explicitly rather than picked automatically by the server.
+     * While this is false the server links a newly added account by itself, so the App must not override it.
+     */
+    hasExplicitLinkedAccount?: boolean;
+
     /** The type of the linked account (debitCard or bankAccount) */
     walletLinkedAccountType: WalletLinkedAccountType;
 

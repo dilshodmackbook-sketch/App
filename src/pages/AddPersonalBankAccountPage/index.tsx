@@ -7,17 +7,19 @@ import useOnyx from '@hooks/useOnyx';
 import useShouldCollectInternationalDepositDetails from '@hooks/useShouldCollectInternationalDepositDetails';
 import useSubPage from '@hooks/useSubPage';
 import type {SubPageProps} from '@hooks/useSubPage/types';
+import useThemeStyles from '@hooks/useThemeStyles';
 
 import {getLatestErrorMessage} from '@libs/ErrorUtils';
 import {formatE164PhoneNumber} from '@libs/LoginUtils';
 import getActiveTabName from '@libs/Navigation/helpers/getActiveTabName';
 import {isFullScreenName} from '@libs/Navigation/helpers/isNavigatorName';
+import {formatPaymentMethods, getPersonalBankAccountToMakeDefault} from '@libs/PaymentUtils';
 import {getCurrentAddress, getStreetLines} from '@libs/PersonalDetailsUtils';
 
 import Navigation, {navigationRef} from '@navigation/Navigation';
 
 import {addPersonalBankAccount, clearPersonalBankAccount} from '@userActions/BankAccounts';
-import {continueSetup} from '@userActions/PaymentMethods';
+import {continueSetup, makeDefaultPaymentMethod} from '@userActions/PaymentMethods';
 
 import CONST from '@src/CONST';
 import NAVIGATORS from '@src/NAVIGATORS';
@@ -58,12 +60,17 @@ const ACCOUNT_OWNERSHIP_ERROR_SUBSTRING = 'account ownership';
 
 function AddPersonalBankAccountPage() {
     const {translate} = useLocalize();
+    const styles = useThemeStyles();
     const route = useRoute();
     const urlSubPage = (route.params as {subPage?: string} | undefined)?.subPage;
 
     const [privatePersonalDetails] = useOnyx(ONYXKEYS.PRIVATE_PERSONAL_DETAILS);
     const [personalBankAccount] = useOnyx(ONYXKEYS.FORMS.PERSONAL_BANK_ACCOUNT_FORM_DRAFT);
     const [fullPersonalBankAccount] = useOnyx(ONYXKEYS.PERSONAL_BANK_ACCOUNT);
+    const [bankAccountList] = useOnyx(ONYXKEYS.BANK_ACCOUNT_LIST);
+    const [fundList] = useOnyx(ONYXKEYS.FUND_LIST);
+    const [userWallet] = useOnyx(ONYXKEYS.USER_WALLET);
+    const hasRequestedDefault = useRef(false);
     const isManual = personalBankAccount?.setupType === CONST.BANK_ACCOUNT.SETUP_TYPE.MANUAL || urlSubPage === SUB_PAGE_NAMES.MANUAL_BANK_ACCOUNT_DETAILS;
     const error = getLatestErrorMessage(fullPersonalBankAccount ?? DEFAULT_OBJECT);
     const confirmedOwnershipDetails = useRef(false);
@@ -205,6 +212,27 @@ function AddPersonalBankAccountPage() {
         }
         moveTo(successIndex, false);
     }, [shouldShowSuccess, currentPageName, moveTo, successIndex]);
+
+    // The delete flow promotes the newest remaining account to default and records an explicit link on the wallet.
+    // Adding a bank account never re-evaluates that, so a re-added account stays non-default. Mirror the delete-time
+    // promotion here: once the add succeeds, promote the newest account so it takes over the stale default. Passing the
+    // previous/current methods flips isDefault on the BANK_ACCOUNT_LIST entries too, keeping them in sync with
+    // walletLinkedAccountID (the delete flow reads those flags to decide the next successor). The ref keeps it to a
+    // single write, since the effect re-runs whenever the wallet changes.
+    useEffect(() => {
+        if (!shouldShowSuccess || hasRequestedDefault.current) {
+            return;
+        }
+        const bankAccountID = getPersonalBankAccountToMakeDefault(bankAccountList, userWallet);
+        if (!bankAccountID) {
+            return;
+        }
+        const paymentMethods = formatPaymentMethods(bankAccountList ?? {}, fundList ?? {}, styles, translate);
+        const previousPaymentMethod = paymentMethods.find((method) => !!method.isDefault);
+        const currentPaymentMethod = paymentMethods.find((method) => method.methodID === bankAccountID);
+        hasRequestedDefault.current = true;
+        makeDefaultPaymentMethod(bankAccountID, 0, previousPaymentMethod, currentPaymentMethod);
+    }, [shouldShowSuccess, bankAccountList, fundList, styles, translate, userWallet]);
 
     useEffect(() => {
         if (!error) {

@@ -18,6 +18,7 @@ import type Fund from '@src/types/onyx/Fund';
 import type {PaymentMethodType} from '@src/types/onyx/OriginalMessage';
 import type PaymentMethod from '@src/types/onyx/PaymentMethod';
 import type {ACHAccount} from '@src/types/onyx/Policy';
+import type UserWallet from '@src/types/onyx/UserWallet';
 
 import type {GestureResponderEvent} from 'react-native';
 import type {OnyxCollection, OnyxEntry} from 'react-native-onyx';
@@ -152,6 +153,63 @@ function formatPaymentMethods(bankAccountList: Record<string, BankAccount>, fund
     }
 
     return combinedPaymentMethods;
+}
+
+/**
+ * Picks the personal bank account that should be promoted to default after a new one is added.
+ *
+ * The delete flow already promotes the newest remaining account and records an explicit link on the wallet
+ * (`hasExplicitLinkedAccount`). Once that flag is set the server stops auto-linking newly added accounts, so
+ * re-adding an account leaves the stale promotion in place. This mirrors the delete-time promotion on the add
+ * side: it returns the newest OPEN personal bank account that is not already the linked default.
+ *
+ * It returns undefined (a no-op) when the server is still auto-linking (`hasExplicitLinkedAccount` is falsy),
+ * when there is a single account (the Default badge is not shown), or when the newest account is already linked.
+ */
+function getPersonalBankAccountToMakeDefault(bankAccountList: Record<string, BankAccount> | undefined, userWallet: OnyxEntry<UserWallet>): number | undefined {
+    // While the server still auto-links a newly added account, adding one promotes it on its own,
+    // so we must not override that promotion here.
+    if (!userWallet?.hasExplicitLinkedAccount) {
+        return undefined;
+    }
+
+    const openPersonalBankAccounts = Object.values(bankAccountList ?? {}).filter(
+        (bankAccount) =>
+            bankAccount?.accountType === CONST.PAYMENT_METHODS.PERSONAL_BANK_ACCOUNT &&
+            bankAccount?.accountData?.type !== CONST.BANK_ACCOUNT.TYPE.BUSINESS &&
+            bankAccount?.accountData?.state === CONST.BANK_ACCOUNT.STATE.OPEN &&
+            bankAccount?.pendingAction !== CONST.RED_BRICK_ROAD_PENDING_ACTION.DELETE,
+    );
+
+    // The Default badge is not shown when there is a single account, so there is nothing to promote.
+    if (openPersonalBankAccounts.length <= 1) {
+        return undefined;
+    }
+
+    // Match the delete flow: the newest account (by created date, descending) is the one to promote.
+    const newestBankAccount = openPersonalBankAccounts
+        .sort((a, b) => {
+            const aCreated = a.accountData?.created ?? '';
+            const bCreated = b.accountData?.created ?? '';
+            if (!aCreated && !bCreated) {
+                return 0;
+            }
+            if (!aCreated) {
+                return 1;
+            }
+            if (!bCreated) {
+                return -1;
+            }
+            return new Date(bCreated).getTime() - new Date(aCreated).getTime();
+        })
+        .at(0);
+
+    const newestBankAccountID = newestBankAccount?.accountData?.bankAccountID ?? newestBankAccount?.methodID;
+    if (!newestBankAccountID || newestBankAccountID === userWallet.walletLinkedAccountID) {
+        return undefined;
+    }
+
+    return newestBankAccountID;
 }
 
 /**
@@ -362,6 +420,7 @@ export {
     hasExpensifyPaymentMethod,
     getPaymentMethodDescription,
     formatPaymentMethods,
+    getPersonalBankAccountToMakeDefault,
     getBusinessBankAccountOptions,
     matchesCurrency,
     calculateWalletTransferBalanceFee,

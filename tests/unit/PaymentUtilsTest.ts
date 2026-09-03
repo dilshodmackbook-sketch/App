@@ -2,7 +2,7 @@ import type {BankAccountMenuItem} from '@components/Search/types';
 
 import {approveMoneyRequest} from '@libs/actions/IOU/ReportWorkflow';
 import Navigation from '@libs/Navigation/Navigation';
-import {getActivePaymentType, getBusinessBankAccountOptions, selectPaymentType} from '@libs/PaymentUtils';
+import {getActivePaymentType, getBusinessBankAccountOptions, getPersonalBankAccountToMakeDefault, selectPaymentType} from '@libs/PaymentUtils';
 import type {SelectPaymentTypeParams} from '@libs/PaymentUtils';
 import {shouldRestrictUserBillableActions} from '@libs/SubscriptionUtils';
 
@@ -10,8 +10,10 @@ import CONST from '@src/CONST';
 import {calculateWalletTransferBalanceFee} from '@src/libs/PaymentUtils';
 import ROUTES from '@src/ROUTES';
 import type {Report} from '@src/types/onyx';
+import type BankAccount from '@src/types/onyx/BankAccount';
 import type {PaymentMethodType} from '@src/types/onyx/OriginalMessage';
 import type PaymentMethod from '@src/types/onyx/PaymentMethod';
+import type UserWallet from '@src/types/onyx/UserWallet';
 
 import createMockPaymentMethod from '../utils/collections/paymentMethods';
 import createRandomPolicy from '../utils/collections/policies';
@@ -529,6 +531,59 @@ describe('PaymentUtils', () => {
 
             expect(result).toHaveLength(2);
             expect(result.at(0)?.text).toBe('Valid Business');
+        });
+    });
+
+    describe('getPersonalBankAccountToMakeDefault', () => {
+        const createUserWallet = (overrides: Partial<UserWallet> = {}): UserWallet => ({
+            availableBalance: 0,
+            currentBalance: 0,
+            currentStep: CONST.WALLET.STEP.ADDITIONAL_DETAILS,
+            tierName: CONST.WALLET.TIER_NAME.GOLD,
+            walletLinkedAccountID: 0,
+            walletLinkedAccountType: CONST.PAYMENT_METHODS.PERSONAL_BANK_ACCOUNT,
+            ...overrides,
+        });
+
+        const createPersonalBankAccount = (bankAccountID: number, created: string, isDefault = false): BankAccount =>
+            createMockPaymentMethod({
+                accountType: CONST.PAYMENT_METHODS.PERSONAL_BANK_ACCOUNT,
+                methodID: bankAccountID,
+                isDefault,
+                accountData: {
+                    type: CONST.BANK_ACCOUNT.TYPE.PERSONAL,
+                    state: CONST.BANK_ACCOUNT.STATE.OPEN,
+                    bankAccountID,
+                    created,
+                },
+            });
+
+        const toBankAccountList = (...accounts: BankAccount[]): Record<string, BankAccount> =>
+            Object.fromEntries(accounts.map((account) => [account.accountData?.bankAccountID ?? CONST.DEFAULT_NUMBER_ID, account]));
+
+        // Wells Fargo (older) was promoted to default when the previous default was deleted; Regions (newer) is the re-added account.
+        const wellsFargo = createPersonalBankAccount(1111, '2024-01-01', true);
+        const regions = createPersonalBankAccount(2222, '2024-02-01', false);
+        const bankAccountList = toBankAccountList(wellsFargo, regions);
+
+        it('promotes the newest open personal bank account once the wallet has an explicit linked account', () => {
+            const userWallet = createUserWallet({hasExplicitLinkedAccount: true, walletLinkedAccountID: 1111});
+            expect(getPersonalBankAccountToMakeDefault(bankAccountList, userWallet)).toBe(2222);
+        });
+
+        it('is a no-op while the server is still auto-linking (hasExplicitLinkedAccount falsy)', () => {
+            const userWallet = createUserWallet({hasExplicitLinkedAccount: false, walletLinkedAccountID: 1111});
+            expect(getPersonalBankAccountToMakeDefault(bankAccountList, userWallet)).toBeUndefined();
+        });
+
+        it('is a no-op when the newest account is already the linked default', () => {
+            const userWallet = createUserWallet({hasExplicitLinkedAccount: true, walletLinkedAccountID: 2222});
+            expect(getPersonalBankAccountToMakeDefault(bankAccountList, userWallet)).toBeUndefined();
+        });
+
+        it('is a no-op when there is only a single account (the Default badge is not shown)', () => {
+            const userWallet = createUserWallet({hasExplicitLinkedAccount: true, walletLinkedAccountID: 1111});
+            expect(getPersonalBankAccountToMakeDefault(toBankAccountList(wellsFargo), userWallet)).toBeUndefined();
         });
     });
 });
