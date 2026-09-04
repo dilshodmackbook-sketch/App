@@ -12088,8 +12088,29 @@ describe('ReportUtils', () => {
             participants: buildParticipantsFromAccountIDs([currentUserAccountID, OTHER_ACCOUNT_ID]),
         };
 
-        it('should return the other participant of a 1:1 DM with their login and accountID', () => {
-            expect(getOneOnOneChatParticipants(dmReport, personalDetailsList, currentUserAccountID)).toEqual([{login: 'other@test.com', accountID: OTHER_ACCOUNT_ID}]);
+        it('should return the other participant of a 1:1 DM by login only (no accountID)', () => {
+            expect(getOneOnOneChatParticipants(dmReport, personalDetailsList, currentUserAccountID)).toEqual([{login: 'other@test.com'}]);
+        });
+
+        it('should not return a client-generated accountID for an optimistic (invited new-email) participant', () => {
+            // A brand-new email recipient is stored under a client-generated accountID with an optimistic personal detail.
+            // Its login must go out (emailList) while the unresolvable accountID must NOT (accountIDList) or the server
+            // returns "Email not found". See https://github.com/Expensify/App/issues/99276.
+            const OPTIMISTIC_ACCOUNT_ID = 9007199254740991;
+            const optimisticPersonalDetails: PersonalDetailsList = {
+                [OPTIMISTIC_ACCOUNT_ID]: {accountID: OPTIMISTIC_ACCOUNT_ID, login: 'newuser@test.com', isOptimisticPersonalDetail: true},
+            };
+            const optimisticDmReport: Report = {
+                ...createRandomReport(0, undefined),
+                type: CONST.REPORT.TYPE.CHAT,
+                policyID: CONST.POLICY.ID_FAKE,
+                participants: buildParticipantsFromAccountIDs([currentUserAccountID, OPTIMISTIC_ACCOUNT_ID]),
+            };
+
+            const result = getOneOnOneChatParticipants(optimisticDmReport, optimisticPersonalDetails, currentUserAccountID);
+
+            expect(result).toEqual([{login: 'newuser@test.com'}]);
+            expect(result.every((participant) => !('accountID' in participant))).toBe(true);
         });
 
         it('should return an empty list for reports that are not 1:1 DMs', () => {
