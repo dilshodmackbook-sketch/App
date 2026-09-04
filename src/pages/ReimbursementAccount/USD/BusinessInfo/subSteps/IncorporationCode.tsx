@@ -11,6 +11,7 @@ import useThemeStyles from '@hooks/useThemeStyles';
 
 import {isValidIndustryCode} from '@libs/ValidationUtils';
 
+import CONST from '@src/CONST';
 import ONYXKEYS from '@src/ONYXKEYS';
 import INPUT_IDS from '@src/types/form/ReimbursementAccountForm';
 
@@ -25,6 +26,11 @@ function IncorporationCode({onNext, isEditing}: SubPageProps) {
     const {translate} = useLocalize();
     const styles = useThemeStyles();
     const [reimbursementAccount] = useOnyx(ONYXKEYS.REIMBURSEMENT_ACCOUNT);
+
+    // "Update details" re-walks the Business info sub-steps without action=edit, so isEditing is false here.
+    // A verifying account has already submitted the company step, so achData.industryCode is a value the user confirmed and should be prefilled.
+    // A SETUP account may still carry a backend seed, so it stays blank there and #88504 remains fixed. This mirrors how BusinessInfo restarts the step for a verifying account.
+    const isBankAccountVerifying = reimbursementAccount?.achData?.state === CONST.BANK_ACCOUNT.STATE.VERIFYING;
 
     const handleSubmit = useReimbursementAccountStepFormSubmit({
         fieldIds: STEP_FIELDS,
@@ -59,7 +65,7 @@ function IncorporationCode({onNext, isEditing}: SubPageProps) {
                 InputComponent={IndustryCodeSelector}
                 inputID={COMPANY_INCORPORATION_CODE_KEY}
                 shouldSaveDraft={!isEditing}
-                defaultValue={isEditing ? reimbursementAccount?.achData?.industryCode : ''}
+                defaultValue={isEditing || isBankAccountVerifying ? reimbursementAccount?.achData?.industryCode : ''}
             />
         </FormProvider>
     );
