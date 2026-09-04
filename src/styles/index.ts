@@ -521,7 +521,7 @@ const staticStyles = (theme: ThemeColors) =>
 
         textExtraSmall: {
             ...FontUtils.fontFamily.platform.EXP_NEUE,
-            fontSize: variables.fontSizeExtraSmall,
+            fontSize: fontScale.finePrint,
         },
 
         textMicro: {
@@ -556,10 +556,10 @@ const staticStyles = (theme: ThemeColors) =>
             lineHeight: variables.lineHeightXSmall,
         },
         textDoubleDecker: {
-            fontSize: variables.fontSizeSmall,
+            fontSize: fontScale.micro,
             opacity: 0.8,
             fontWeight: FontUtils.fontWeight.bold,
-            lineHeight: 12,
+            lineHeight: lineHeightScale.finePrint,
         },
         noPaddingBottom: {
             paddingBottom: 0,
@@ -574,16 +574,16 @@ const staticStyles = (theme: ThemeColors) =>
         },
 
         textLarge: {
-            fontSize: variables.fontSizeLarge,
+            fontSize: fontScale.pageHeader,
         },
 
         textXLarge: {
-            fontSize: variables.fontSizeXLarge,
+            fontSize: fontScale.h1,
         },
 
         textXLargeThemeText: {
             color: theme.text,
-            fontSize: variables.fontSizeXLarge,
+            fontSize: fontScale.h1,
         },
 
         textXXLarge: {
@@ -1583,7 +1583,7 @@ const staticStyles = (theme: ThemeColors) =>
         },
 
         textInputLabel: {
-            fontSize: variables.fontSizeNormal,
+            fontSize: fontScale.text,
             color: theme.textSupporting,
             ...FontUtils.fontFamily.platform.EXP_NEUE,
         },
@@ -1668,14 +1668,14 @@ const staticStyles = (theme: ThemeColors) =>
         textInputPrefix: {
             color: theme.text,
             ...FontUtils.fontFamily.platform.EXP_NEUE,
-            fontSize: variables.fontSizeNormal,
+            fontSize: fontScale.text,
             verticalAlign: 'middle',
         },
 
         textInputSuffix: {
             color: theme.text,
             ...FontUtils.fontFamily.platform.EXP_NEUE,
-            fontSize: variables.fontSizeNormal,
+            fontSize: fontScale.text,
             verticalAlign: 'middle',
         },
 
@@ -1711,19 +1711,19 @@ const staticStyles = (theme: ThemeColors) =>
 
         textLabelSupporting: {
             ...FontUtils.fontFamily.platform.EXP_NEUE,
-            fontSize: variables.fontSizeLabel,
+            fontSize: fontScale.label,
             color: theme.textSupporting,
         },
 
         textLabelSupportingEmptyValue: {
             ...FontUtils.fontFamily.platform.EXP_NEUE,
-            fontSize: variables.fontSizeNormal,
+            fontSize: fontScale.text,
             color: theme.textSupporting,
         },
 
         textLabelSupportingNormal: {
             ...FontUtils.fontFamily.platform.EXP_NEUE,
-            fontSize: variables.fontSizeLabel,
+            fontSize: fontScale.label,
             color: theme.textSupporting,
         },
 
@@ -3462,7 +3462,7 @@ const staticStyles = (theme: ThemeColors) =>
 
         moneyRequestConfirmationAmount: {
             ...headlineFont,
-            fontSize: variables.fontSizeH1,
+            fontSize: fontScale.h2,
         },
 
         moneyRequestMenuItem: {
