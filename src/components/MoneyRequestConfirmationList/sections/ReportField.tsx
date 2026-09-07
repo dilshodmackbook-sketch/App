@@ -4,9 +4,9 @@ import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
 import useOutstandingReports from '@hooks/useOutstandingReports';
 import {useDerivedReportNameByReportID} from '@hooks/useReportAttributes';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import {getReportName} from '@libs/ReportNameUtils';
 import {generateReportID, getOutstandingReportsForUser, isMoneyRequestReport, isReportOutstanding} from '@libs/ReportUtils';
@@ -54,6 +54,7 @@ type ReportFieldProps = {
 function ReportField({selectedParticipants, iouType, reportID, reportActionID, action, transactionID, isPerDiemRequest, isPolicyExpenseChat}: ReportFieldProps) {
     const styles = useThemeStyles();
     const {translate, localeCompare} = useLocalize();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
 
     const policyID = selectedParticipants?.at(0)?.policyID;
     const [outstandingReportsForPolicy] = useOnyx(ONYXKEYS.DERIVED.OUTSTANDING_REPORTS_BY_POLICY_ID, {selector: createOutstandingReportsForPolicySelector(policyID)});
@@ -134,7 +135,7 @@ function ReportField({selectedParticipants, iouType, reportID, reportActionID, a
                 if (!transactionID || !selectedReportID) {
                     return;
                 }
-                Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_REPORT.getRoute(action, iouType, transactionID, selectedReportID, reportActionID)));
+                Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_REPORT.getRoute(action, iouType, transactionID, selectedReportID, reportActionID)));
             }}
             interactive={shouldReportBeEditable}
             shouldRenderAsHTML

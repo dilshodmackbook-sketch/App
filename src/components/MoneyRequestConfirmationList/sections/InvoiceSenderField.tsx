@@ -4,8 +4,8 @@ import MenuItemWithLabel from '@components/MenuItem/presets/MenuItemWithLabel';
 
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import {canSendInvoice} from '@libs/PolicyUtils';
 
@@ -43,6 +43,7 @@ const createCanUpdateSenderWorkspaceSelector =
 
 function InvoiceSenderField({selectedParticipants, isReadOnly, didConfirm, transaction}: InvoiceSenderFieldProps) {
     const {translate} = useLocalize();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
 
     const senderPolicyID = selectedParticipants.find((participant) => participant.isSender)?.policyID;
 
@@ -64,7 +65,7 @@ function InvoiceSenderField({selectedParticipants, isReadOnly, didConfirm, trans
               if (!transaction?.transactionID) {
                   return;
               }
-              Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_SEND_FROM.path));
+              Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_SEND_FROM.path));
           }
         : undefined;
 

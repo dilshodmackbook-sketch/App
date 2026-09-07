@@ -1,10 +1,10 @@
 import MenuItemWithTopDescription from '@components/MenuItemWithTopDescription';
 
 import useLocalize from '@hooks/useLocalize';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import DistanceRequestUtils from '@libs/DistanceRequestUtils';
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 
 import CONST from '@src/CONST';
@@ -50,6 +50,7 @@ function DistanceField({
 }: DistanceFieldProps) {
     const styles = useThemeStyles();
     const {translate} = useLocalize();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
 
     const displayUnit = unit ?? customUnit?.distanceUnit;
     const commuterExclusionData = DistanceRequestUtils.getCommuterExclusionDisplayData(customUnit, displayUnit ?? CONST.CUSTOM_UNITS.DISTANCE_UNIT_MILES);
@@ -70,7 +71,7 @@ function DistanceField({
                 }
 
                 if (isManualDistanceRequest) {
-                    Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE_MANUAL.getRoute(action, iouType, transactionID, reportID, reportActionID)));
+                    Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE_MANUAL.getRoute(action, iouType, transactionID, reportID, reportActionID)));
                     return;
                 }
 
@@ -79,7 +80,7 @@ function DistanceField({
                     return;
                 }
 
-                Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE.getRoute(action, iouType, transactionID, reportID, reportActionID)));
+                Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE.getRoute(action, iouType, transactionID, reportID, reportActionID)));
             }}
             disabled={didConfirm}
             interactive={!isReadOnly && !isGPSDistanceRequest}

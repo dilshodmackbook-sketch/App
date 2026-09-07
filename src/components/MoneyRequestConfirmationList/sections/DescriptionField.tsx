@@ -7,11 +7,11 @@ import TextInput from '@components/TextInput';
 import {useCurrencyListActions} from '@hooks/useCurrencyList';
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {setMoneyRequestDescription} from '@libs/actions/IOU/MoneyRequest';
 import {canUseTouchScreen} from '@libs/DeviceCapabilities';
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import Parser from '@libs/Parser';
 
@@ -43,6 +43,7 @@ function DescriptionField({isDescriptionRequired, policy}: DescriptionFieldProps
     const styles = useThemeStyles();
     const {translate} = useLocalize();
     const {getCurrencyDecimals, getCurrencySymbol} = useCurrencyListActions();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
     // Ref on the field's outer container (the bordered box), so scrolling brings the whole field — including its
     // top border and label — into view rather than just the inner text area.
     const fieldContainerRef = useRef<View>(null);
@@ -131,7 +132,7 @@ function DescriptionField({isDescriptionRequired, policy}: DescriptionFieldProps
                                         return;
                                     }
 
-                                    Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DESCRIPTION.getRoute(action, iouType, transactionID, reportID, reportActionID)));
+                                    Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DESCRIPTION.getRoute(action, iouType, transactionID, reportID, reportActionID)));
                                 }}
                                 style={[styles.moneyRequestMenuItem]}
                                 titleStyle={styles.flex1}

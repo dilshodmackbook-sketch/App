@@ -5,11 +5,11 @@ import {useSearchRouterState} from '@components/Search/SearchRouter/SearchRouter
 import {useCurrencyListActions} from '@hooks/useCurrencyList';
 import useLocalize from '@hooks/useLocalize';
 import useNetwork from '@hooks/useNetwork';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import DistanceRequestUtils from '@libs/DistanceRequestUtils';
 import type {MileageRate} from '@libs/DistanceRequestUtils';
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import ViolationsUtils from '@libs/Violations/ViolationsUtils';
 
@@ -71,6 +71,7 @@ function RateField({
     const styles = useThemeStyles();
     const {translate, toLocaleDigit, dateFnsLocale} = useLocalize();
     const {getCurrencySymbol, convertToDisplayString} = useCurrencyListActions();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
     const shouldDisplayDistanceRateError = formError === 'iou.error.invalidRate';
     const {isOffline} = useNetwork();
 
@@ -121,7 +122,7 @@ function RateField({
 
                 if ((!isPolicyExpenseChat && !isTrackExpense) || (shouldNavigateToUpgradePath && isTrackExpense)) {
                     Navigation.navigate(
-                        createDynamicRoute(
+                        buildDynamicRoute(
                             DYNAMIC_ROUTES.MONEY_REQUEST_UPGRADE.getRoute({
                                 action,
                                 iouType,
@@ -136,11 +137,11 @@ function RateField({
                 } else if (!policy && shouldSelectPolicy && isTrackExpense) {
                     Navigation.navigate(
                         ROUTES.SET_DEFAULT_WORKSPACE.getRoute(
-                            createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE_RATE.getRoute(action, iouType, transactionID, reportID, reportActionID)),
+                            buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE_RATE.getRoute(action, iouType, transactionID, reportID, reportActionID)),
                         ),
                     );
                 } else {
-                    Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE_RATE.getRoute(action, iouType, transactionID, reportID, reportActionID)));
+                    Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DISTANCE_RATE.getRoute(action, iouType, transactionID, reportID, reportActionID)));
                 }
             }}
             brickRoadIndicator={shouldDisplayDistanceRateError || isRateOutOfDateRange ? CONST.BRICK_ROAD_INDICATOR_STATUS.ERROR : undefined}

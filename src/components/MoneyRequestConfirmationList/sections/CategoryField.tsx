@@ -2,10 +2,10 @@ import MenuItemWithTopDescription from '@components/MenuItemWithTopDescription';
 
 import {useMemoizedLazyExpensifyIcons} from '@hooks/useLazyAsset';
 import useLocalize from '@hooks/useLocalize';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {getDecodedLeafCategoryName} from '@libs/CategoryUtils';
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 
 import CONST from '@src/CONST';
@@ -53,6 +53,7 @@ function CategoryField({
     const styles = useThemeStyles();
     const {translate} = useLocalize();
     const icons = useMemoizedLazyExpensifyIcons(['Sparkles']);
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
 
     const categoryState = useTransactionSelector(transactionID, categoryStateSelector);
 
@@ -85,13 +86,13 @@ function CategoryField({
 
                 if (shouldNavigateToUpgradePath) {
                     Navigation.navigate(
-                        createDynamicRoute(
+                        buildDynamicRoute(
                             DYNAMIC_ROUTES.MONEY_REQUEST_UPGRADE.getRoute({
                                 action,
                                 iouType,
                                 transactionID,
                                 reportID,
-                                upgradeBackTo: createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_CATEGORY.getRoute({action, iouType, transactionID, reportID, reportActionID})),
+                                upgradeBackTo: buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_CATEGORY.getRoute({action, iouType, transactionID, reportID, reportActionID})),
                                 upgradePath: CONST.UPGRADE_PATHS.CATEGORIES,
                             }),
                         ),
@@ -99,11 +100,11 @@ function CategoryField({
                 } else if (!policy && shouldSelectPolicy) {
                     Navigation.navigate(
                         ROUTES.SET_DEFAULT_WORKSPACE.getRoute(
-                            createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_CATEGORY.getRoute({action, iouType, transactionID, reportID, reportActionID})),
+                            buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_CATEGORY.getRoute({action, iouType, transactionID, reportID, reportActionID})),
                         ),
                     );
                 } else {
-                    Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_CATEGORY.getRoute({action, iouType, transactionID, reportID, reportActionID})));
+                    Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_CATEGORY.getRoute({action, iouType, transactionID, reportID, reportActionID})));
                 }
             }}
             style={[styles.moneyRequestMenuItem]}

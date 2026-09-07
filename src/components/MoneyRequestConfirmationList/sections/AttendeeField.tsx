@@ -5,10 +5,10 @@ import UserPills from '@components/UserPills';
 import useAttendees from '@hooks/useAttendees';
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {enrichAndSortAttendees} from '@libs/AttendeeUtils';
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import {getAttendeesListDisplayString} from '@libs/TransactionUtils';
 
@@ -39,6 +39,7 @@ type AttendeeFieldProps = {
 function AttendeeField({formattedAmountPerAttendee, isReadOnly, transactionID, action, iouType, reportID, formError}: AttendeeFieldProps) {
     const styles = useThemeStyles();
     const {translate, localeCompare} = useLocalize();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
     const personalDetailsList = usePersonalDetails();
     const [loginToAccountIDMap] = useOnyx(ONYXKEYS.DERIVED.LOGIN_TO_ACCOUNT_ID_MAP);
     const shouldDisplayAttendeesError = formError === 'violations.missingAttendees';
@@ -77,7 +78,7 @@ function AttendeeField({formattedAmountPerAttendee, isReadOnly, transactionID, a
                     return;
                 }
 
-                Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_ATTENDEE.getRoute(action, iouType, transactionID, reportID)));
+                Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_ATTENDEE.getRoute(action, iouType, transactionID, reportID)));
             }}
             interactive={!isReadOnly}
             brickRoadIndicator={shouldDisplayAttendeesError ? CONST.BRICK_ROAD_INDICATOR_STATUS.ERROR : undefined}

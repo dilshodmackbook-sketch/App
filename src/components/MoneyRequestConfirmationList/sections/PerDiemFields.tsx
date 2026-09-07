@@ -3,9 +3,9 @@ import MenuItemWithTopDescription from '@components/MenuItemWithTopDescription';
 
 import {useMemoizedLazyExpensifyIcons} from '@hooks/useLazyAsset';
 import useLocalize from '@hooks/useLocalize';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import {getDestinationForDisplay, getSubratesFields, getSubratesForDisplay, getTimeDifferenceIntervals, getTimeForDisplay} from '@libs/PerDiemRequestUtils';
 
@@ -33,6 +33,7 @@ function PerDiemFields({perDiemCustomUnit, transaction, isReadOnly, didConfirm, 
     const styles = useThemeStyles();
     const {translate} = useLocalize();
     const icons = useMemoizedLazyExpensifyIcons(['Stopwatch', 'CalendarSolid']);
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
 
     const subRates = getSubratesFields(perDiemCustomUnit, transaction);
     const shouldDisplaySubrateError = (shouldDisplayFieldError || formError === 'iou.error.invalidSubrateLength') && (subRates.length === 0 || (subRates.length === 1 && !subRates.at(0)));
@@ -49,7 +50,7 @@ function PerDiemFields({perDiemCustomUnit, transaction, isReadOnly, didConfirm, 
                 if (!transactionID) {
                     return;
                 }
-                Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_SUBRATE_EDIT.getRoute(index)));
+                Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_SUBRATE_EDIT.getRoute(index)));
             }}
             disabled={didConfirm}
             interactive={!isReadOnly}
@@ -105,7 +106,7 @@ function PerDiemFields({perDiemCustomUnit, transaction, isReadOnly, didConfirm, 
                     if (!transactionID) {
                         return;
                     }
-                    Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DESTINATION_EDIT.path));
+                    Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DESTINATION_EDIT.path));
                 }}
                 disabled={didConfirm}
                 interactive={!isReadOnly}
@@ -122,7 +123,7 @@ function PerDiemFields({perDiemCustomUnit, transaction, isReadOnly, didConfirm, 
                     if (!transactionID) {
                         return;
                     }
-                    Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TIME_EDIT.path));
+                    Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TIME_EDIT.path));
                 }}
                 disabled={didConfirm}
                 interactive={!isReadOnly}

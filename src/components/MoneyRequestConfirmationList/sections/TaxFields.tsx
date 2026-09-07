@@ -6,12 +6,12 @@ import type {NumberWithSymbolFormRef} from '@components/NumberWithSymbolForm';
 import {useCurrencyListActions} from '@hooks/useCurrencyList';
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {setMoneyRequestTaxAmount} from '@libs/actions/IOU/MoneyRequest';
 import {convertToBackendAmount, convertToFrontendAmountAsString, getLocalizedCurrencySymbol} from '@libs/CurrencyUtils';
 import {isMovingTransactionFromTrackExpense} from '@libs/IOUUtils';
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import {getCalculatedTaxAmount, getTaxAmount, getTaxRateTitle} from '@libs/TransactionUtils';
 
@@ -51,6 +51,7 @@ function TaxFields({policy, policyForMovingExpenses, iouCurrencyCode, canModifyT
     const {translate, preferredLocale} = useLocalize();
     const {convertToDisplayString, getCurrencyDecimals, getCurrencySymbol} = useCurrencyListActions();
     const {isNewManualExpenseFlowEnabled, isEditingSplitBill, onTaxAmountEmptyChange} = useConfirmationFields();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
     const numberFormRef = useRef<NumberWithSymbolFormRef | null>(null);
 
     const [splitDraftTransaction] = useOnyx(`${ONYXKEYS.COLLECTION.SPLIT_TRANSACTION_DRAFT}${transactionID}`);
@@ -150,7 +151,7 @@ function TaxFields({policy, policyForMovingExpenses, iouCurrencyCode, canModifyT
                         return;
                     }
 
-                    Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TAX_RATE.getRoute(action, iouType, transactionID, reportID)));
+                    Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TAX_RATE.getRoute(action, iouType, transactionID, reportID)));
                 }}
                 disabled={didConfirm}
                 interactive={canModifyTaxFields}
@@ -190,7 +191,7 @@ function TaxFields({policy, policyForMovingExpenses, iouCurrencyCode, canModifyT
                             return;
                         }
 
-                        Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TAX_AMOUNT.getRoute(action, iouType, transactionID, reportID)));
+                        Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TAX_AMOUNT.getRoute(action, iouType, transactionID, reportID)));
                     }}
                     disabled={didConfirm}
                     interactive={canModifyTaxFields}

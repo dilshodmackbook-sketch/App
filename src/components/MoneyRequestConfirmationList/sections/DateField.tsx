@@ -8,11 +8,11 @@ import useOnyx from '@hooks/useOnyx';
 import usePersonalPolicy from '@hooks/usePersonalPolicy';
 import usePolicy from '@hooks/usePolicy';
 import usePolicyForMovingExpenses from '@hooks/usePolicyForMovingExpenses';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {setMoneyRequestCreated, updateDistanceRateOnExpenseDateChange} from '@libs/actions/IOU/MoneyRequest';
 import {shouldUseTransactionDraft} from '@libs/IOUUtils';
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 import {isPolicyExpenseChat as isPolicyExpenseChatReportUtil} from '@libs/ReportUtils';
 
@@ -62,6 +62,7 @@ function DateField({
     const {isEditingSplitBill} = useConfirmationFields();
     const styles = useThemeStyles();
     const {translate} = useLocalize();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
     const isTrackExpense = iouType === CONST.IOU.TYPE.TRACK;
     const {policyForMovingExpensesID} = usePolicyForMovingExpenses();
     const policyForTrackExpense = usePolicy(isTrackExpense ? policyForMovingExpensesID : undefined);
@@ -151,7 +152,7 @@ function DateField({
                     return;
                 }
 
-                Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DATE.getRoute(action, iouType, transactionID, reportID, reportActionID)));
+                Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_DATE.getRoute(action, iouType, transactionID, reportID, reportActionID)));
             }}
             disabled={didConfirm}
             interactive={!isReadOnly}

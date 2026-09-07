@@ -1,9 +1,9 @@
 import HighlightableMenuItemWithTopDescription from '@components/HighlightableMenuItemWithTopDescription';
 
 import useLocalize from '@hooks/useLocalize';
+import useScreenBoundDynamicRoute from '@hooks/useScreenBoundDynamicRoute';
 import useThemeStyles from '@hooks/useThemeStyles';
 
-import createDynamicRoute from '@libs/Navigation/helpers/dynamicRoutesUtils/createDynamicRoute';
 import Navigation from '@libs/Navigation/Navigation';
 
 import CONST from '@src/CONST';
@@ -52,6 +52,7 @@ function TagFields({
 }: TagFieldsProps) {
     const styles = useThemeStyles();
     const {translate} = useLocalize();
+    const buildDynamicRoute = useScreenBoundDynamicRoute();
     const shouldDisplayTagError = formError === 'violations.tagOutOfPolicy';
 
     const tagDisplaySelector = createTagDisplaySelector(tagIndex);
@@ -73,7 +74,7 @@ function TagFields({
                     return;
                 }
 
-                Navigation.navigate(createDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TAG.getRoute(action, iouType, tagIndex, transactionID, reportID, reportActionID)));
+                Navigation.navigate(buildDynamicRoute(DYNAMIC_ROUTES.MONEY_REQUEST_STEP_TAG.getRoute(action, iouType, tagIndex, transactionID, reportID, reportActionID)));
             }}
             style={[styles.moneyRequestMenuItem]}
             brickRoadIndicator={shouldDisplayTagError && !!displayedTag ? CONST.BRICK_ROAD_INDICATOR_STATUS.ERROR : undefined}
