@@ -2331,7 +2331,12 @@ function getTransactionsSections({
                 policy,
             );
             // Use Map.get() for faster lookups with default values
-            const fromAccountID = reportAction?.actorAccountID ?? report?.ownerAccountID;
+            const isUnreported = transactionItem.reportID === CONST.REPORT.UNREPORTED_REPORT_ID;
+            // An unreported expense always lives in the current user's own self DM, so the current user is the "From" account.
+            // When an expense is moved out of a report while offline, the new self-DM IOU action is not mirrored into the Search
+            // snapshot (Onyx only syncs snapshot keys that already exist), so both `reportAction` and `report` are missing here.
+            // Without this fallback `fromAccountID` is undefined and the row blanks out until the next server snapshot arrives.
+            const fromAccountID = reportAction?.actorAccountID ?? report?.ownerAccountID ?? (isUnreported ? currentAccountID : undefined);
             const from = fromAccountID ? (personalDetailsMap.get(fromAccountID.toString()) ?? emptyPersonalDetails) : emptyPersonalDetails;
             const to = getToFieldValueForTransaction(transactionItem, report, data.personalDetailsList, reportAction);
             const isIOUReport = report?.type === CONST.REPORT.TYPE.IOU;
@@ -2354,7 +2359,6 @@ function getTransactionsSections({
             const reportOwnerAccountIDAsAttendee = getReportOwnerAccountIDAsAttendee(transactionItem, currentAccountID);
             const reportOwnerAsAttendee = reportOwnerAccountIDAsAttendee ? getReportOwnerAsAttendee(personalDetailsMap.get(reportOwnerAccountIDAsAttendee.toString())) : undefined;
             const transactionAttendees = getAttendees(transactionItem, reportOwnerAsAttendee);
-            const isUnreported = transactionItem.reportID === CONST.REPORT.UNREPORTED_REPORT_ID;
             // For unreported transactions, attendee tracking is gated by the policy-for-moving-expenses.
             // The caller passes the precomputed boolean instead of the policy object so the screen-level
             // getSections memo does not recompute when unrelated fields of that policy change.
@@ -3349,7 +3353,11 @@ function getReportSections({
                 policy,
             );
             const actions = getLiveOrSnapshotReportActions(reportActions, data, transactionItem.reportID);
-            const from = reportAction?.actorAccountID ? (mergedPersonalDetails?.[reportAction.actorAccountID] ?? emptyPersonalDetails) : emptyPersonalDetails;
+            // Mirror the flat-list fallback: an unreported expense lives in the current user's self DM, so fall back to the
+            // current user when the snapshot has neither the self-DM action nor a report (e.g. an offline move to the self DM).
+            const isUnreported = transactionItem.reportID === CONST.REPORT.UNREPORTED_REPORT_ID;
+            const fromAccountID = reportAction?.actorAccountID ?? report?.ownerAccountID ?? (isUnreported ? currentAccountID : undefined);
+            const from = fromAccountID ? (mergedPersonalDetails?.[fromAccountID] ?? emptyPersonalDetails) : emptyPersonalDetails;
             const to = getToFieldValueForTransaction(transactionItem, report, mergedPersonalDetails, reportAction);
             const isIOUReport = report?.type === CONST.REPORT.TYPE.IOU;
 

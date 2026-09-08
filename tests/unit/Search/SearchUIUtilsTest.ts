@@ -2731,6 +2731,61 @@ describe('SearchUIUtils', () => {
             ).toEqual(transactionsListItems);
         });
 
+        it('should resolve "From" to the current user for an unreported transaction with no self-DM action in the snapshot (offline move)', () => {
+            // Reproduce the reported bug: an expense moved to the self DM while offline. The transaction's reportID
+            // becomes the UNREPORTED_REPORT_ID sentinel (no dereferenceable report) and the new self-DM IOU action is
+            // not mirrored into the Search snapshot, so both `reportAction` and `report` are missing. Before the fix,
+            // `fromAccountID` was undefined and the row fell back to emptyPersonalDetails (accountID 0) -> blank name/avatar.
+            const offlineMoveData: OnyxTypes.SearchResults['data'] = {
+                personalDetailsList: {
+                    [submitterAccountID]: {
+                        accountID: submitterAccountID,
+                        avatar: 'https://d2k5nsl2zxldvw.cloudfront.net/images/avatars/avatar_3.png',
+                        displayName: 'Submitter',
+                        login: submitterEmail,
+                    },
+                },
+                [`transactions_${transactionID}`]: {
+                    amount: -5000,
+                    category: '',
+                    comment: {comment: ''},
+                    created: '2024-12-21',
+                    currency: 'USD',
+                    hasEReceipt: false,
+                    merchant: 'Coffee',
+                    modifiedAmount: '',
+                    modifiedCreated: '',
+                    modifiedCurrency: '',
+                    modifiedMerchant: '',
+                    parentTransactionID: '',
+                    reportID: CONST.REPORT.UNREPORTED_REPORT_ID,
+                    tag: '',
+                    transactionID,
+                },
+            };
+
+            const result = getSectionsByType(
+                SearchUIUtils.getSections({
+                    dateFnsLocale: undefined,
+                    type: CONST.SEARCH.DATA_TYPES.EXPENSE,
+                    data: offlineMoveData,
+                    currentAccountID: submitterAccountID,
+                    currentUserEmail: submitterEmail,
+                    translate: translateLocal,
+                    formatPhoneNumber,
+                    bankAccountList: {},
+                    conciergeReportID: undefined,
+                    convertToDisplayString,
+                    reportAttributesDerivedValue: {},
+                }),
+                SearchUIUtils.isTransactionListItemType,
+            )[0];
+
+            const movedTransaction = result.find((item) => item.transactionID === transactionID);
+            expect(movedTransaction?.from?.accountID).toBe(submitterAccountID);
+            expect(movedTransaction?.formattedFrom).toBe('Submitter');
+        });
+
         it('should include iouRequestType property for distance transactions', () => {
             const distanceTransactionID = 'distance_transaction_123';
             const testSearchResults = {
