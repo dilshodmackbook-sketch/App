@@ -97,3 +97,34 @@
 - Upstream PR/issue: https://github.com/Shopify/react-native-skia/pull/3855 — the same fix, merged upstream on 2026-05-26. Drop this patch once the Skia dependency is bumped to >= 2.6.9.
 - E/App issue: https://github.com/Expensify/App/issues/98331, https://github.com/Expensify/App/issues/95905
 - PR introducing patch: https://github.com/Expensify/App/pull/98437
+
+### [@shopify+react-native-skia+2.4.18+004+chart-canvas-hidpi-scale-web.patch](@shopify+react-native-skia+2.4.18+004+chart-canvas-hidpi-scale-web.patch)
+
+- Reason:
+
+    ```
+    Fixes soft/blurry text in summary charts on web (E/App #95221). In-product charts are
+    a live Skia canvas. WebGLRenderer sizes its backing store from canvas.clientWidth (the
+    layout width), which never reflects the CSS transform: scale we apply to fit the chart
+    into the message column and the expand modal. So the surface is rasterised for the
+    chart's design box and the compositor resamples that bitmap to the painted size, which
+    softens the text. Measured at DPR 2: inline resamples ~1.3x-1.6x below the chart's
+    design width and the expand modal upscales ~1.9x.
+
+    Fix (web only, WebGLRenderer):
+    - onResize sizes the backing store from getBoundingClientRect (the painted size),
+      deriving the accumulated CSS scale as rect.width / clientWidth, and draw() scales by
+      that ratio instead of the module pixel ratio.
+    - clientWidth does not change when only an ancestor transform changes, so there is no
+      resize event for the inline chart (it mounts at scale 1, then the transform lands).
+      syncSizeIfNeeded re-derives the target from the bounding rect inside the existing
+      requestAnimationFrame tick and rebuilds only when the painted size actually moved, so
+      the surface self-corrects with no React remount and no app-side changes.
+
+    The email PNG path (makeOffscreenSurface) is untouched, and StaticWebGLRenderer does
+    not get the method, so the optional-call guard keeps it a no-op there.
+    ```
+
+- Upstream PR/issue:
+- E/App issue: https://github.com/Expensify/App/issues/95221
+- PR introducing patch:

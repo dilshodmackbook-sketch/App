@@ -1,0 +1,142 @@
+diff --git a/node_modules/@shopify/react-native-skia/lib/commonjs/views/SkiaPictureView.web.js b/node_modules/@shopify/react-native-skia/lib/commonjs/views/SkiaPictureView.web.js
+index cad87bc..25cf559 100644
+--- a/node_modules/@shopify/react-native-skia/lib/commonjs/views/SkiaPictureView.web.js
++++ b/node_modules/@shopify/react-native-skia/lib/commonjs/views/SkiaPictureView.web.js
+@@ -46,8 +46,14 @@ class WebGLRenderer {
+       canvas,
+       pd
+     } = this;
+-    canvas.width = canvas.clientWidth * pd;
+-    canvas.height = canvas.clientHeight * pd;
++    // POC FIX: size the backing store from the canvas's *painted* size (which reflects any ancestor
++    // CSS transform: scale), not its layout size. clientWidth ignores the transform, so on a scaled
++    // chart the surface was sized for the 680px design box and then resampled by the compositor.
++    const rect = canvas.getBoundingClientRect();
++    const cssScale = canvas.clientWidth > 0 && rect.width > 0 ? rect.width / canvas.clientWidth : 1;
++    this.ratio = pd * cssScale;
++    canvas.width = Math.round(canvas.clientWidth * this.ratio);
++    canvas.height = Math.round(canvas.clientHeight * this.ratio);
+     // MakeWebGLCanvasSurface throws when no WebGL2 context can be created (GPU unavailable, blocklisted,
+     // or the per-page context limit is exhausted). onResize runs from a ResizeObserver callback, so that
+     // throw escapes as an unhandled error. Fall back to CanvasKit's software surface, matching how
+@@ -86,12 +92,32 @@ class WebGLRenderer {
+     }
+     this.surface = new _JsiSkSurface.JsiSkSurface(CanvasKit, surface);
+   }
++  // POC FIX: the backing store must track the canvas's *painted* size, which changes when an ancestor
++  // CSS transform: scale changes (inline column resize, expand modal) without ever changing clientWidth.
++  // ResizeObserver/clientWidth are blind to ancestor transforms, so we re-derive the target from the
++  // bounding rect and rebuild the surface only when it actually changes. Returns true if it resized.
++  syncSizeIfNeeded() {
++    const {
++      canvas,
++      pd
++    } = this;
++    const rect = canvas.getBoundingClientRect();
++    if (!canvas.clientWidth || !rect.width) {
++      return false;
++    }
++    const targetWidth = Math.round(canvas.clientWidth * pd * (rect.width / canvas.clientWidth));
++    if (targetWidth === canvas.width) {
++      return false;
++    }
++    this.onResize();
++    return true;
++  }
+   draw(picture) {
+     if (this.surface) {
+       const canvas = this.surface.getCanvas();
+       canvas.clear(Float32Array.of(0, 0, 0, 0));
+       canvas.save();
+-      canvas.scale(pd, pd);
++      canvas.scale(this.ratio ?? pd, this.ratio ?? pd);
+       canvas.drawPicture(picture);
+       canvas.restore();
+       this.surface.ref.flush();
+@@ -268,7 +294,14 @@ const SkiaPictureView = props => {
+     }
+   }, []);
+   const tick = (0, _react.useCallback)(() => {
+-    if (redrawRequestsRef.current > 0) {
++    // POC FIX: keep the backing store in sync with the painted size every frame. syncSizeIfNeeded is
++    // a no-op (one bounding-rect read, no rebuild) unless the painted size actually changed, so this
++    // self-corrects on transform/scale changes with no React remount and no app-side wiring.
++    let sizeChanged = false;
++    if (renderer.current && renderer.current.syncSizeIfNeeded) {
++      sizeChanged = renderer.current.syncSizeIfNeeded();
++    }
++    if (redrawRequestsRef.current > 0 || sizeChanged) {
+       redrawRequestsRef.current = 0;
+       if (renderer.current && pictureRef.current) {
+         renderer.current.draw(pictureRef.current);
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/views/SkiaPictureView.web.js b/node_modules/@shopify/react-native-skia/lib/module/views/SkiaPictureView.web.js
+index 12ea0ae..fb585e9 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/views/SkiaPictureView.web.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/views/SkiaPictureView.web.js
+@@ -40,8 +40,14 @@ class WebGLRenderer {
+       canvas,
+       pd
+     } = this;
+-    canvas.width = canvas.clientWidth * pd;
+-    canvas.height = canvas.clientHeight * pd;
++    // POC FIX: size the backing store from the canvas's *painted* size (which reflects any ancestor
++    // CSS transform: scale), not its layout size. clientWidth ignores the transform, so on a scaled
++    // chart the surface was sized for the 680px design box and then resampled by the compositor.
++    const rect = canvas.getBoundingClientRect();
++    const cssScale = canvas.clientWidth > 0 && rect.width > 0 ? rect.width / canvas.clientWidth : 1;
++    this.ratio = pd * cssScale;
++    canvas.width = Math.round(canvas.clientWidth * this.ratio);
++    canvas.height = Math.round(canvas.clientHeight * this.ratio);
+     // MakeWebGLCanvasSurface throws when no WebGL2 context can be created (GPU unavailable, blocklisted,
+     // or the per-page context limit is exhausted). onResize runs from a ResizeObserver callback, so that
+     // throw escapes as an unhandled error. Fall back to CanvasKit's software surface, matching how
+@@ -80,12 +86,32 @@ class WebGLRenderer {
+     }
+     this.surface = new JsiSkSurface(CanvasKit, surface);
+   }
++  // POC FIX: the backing store must track the canvas's *painted* size, which changes when an ancestor
++  // CSS transform: scale changes (inline column resize, expand modal) without ever changing clientWidth.
++  // ResizeObserver/clientWidth are blind to ancestor transforms, so we re-derive the target from the
++  // bounding rect and rebuild the surface only when it actually changes. Returns true if it resized.
++  syncSizeIfNeeded() {
++    const {
++      canvas,
++      pd
++    } = this;
++    const rect = canvas.getBoundingClientRect();
++    if (!canvas.clientWidth || !rect.width) {
++      return false;
++    }
++    const targetWidth = Math.round(canvas.clientWidth * pd * (rect.width / canvas.clientWidth));
++    if (targetWidth === canvas.width) {
++      return false;
++    }
++    this.onResize();
++    return true;
++  }
+   draw(picture) {
+     if (this.surface) {
+       const canvas = this.surface.getCanvas();
+       canvas.clear(Float32Array.of(0, 0, 0, 0));
+       canvas.save();
+-      canvas.scale(pd, pd);
++      canvas.scale(this.ratio ?? pd, this.ratio ?? pd);
+       canvas.drawPicture(picture);
+       canvas.restore();
+       this.surface.ref.flush();
+@@ -262,7 +288,14 @@ export const SkiaPictureView = props => {
+     }
+   }, []);
+   const tick = useCallback(() => {
+-    if (redrawRequestsRef.current > 0) {
++    // POC FIX: keep the backing store in sync with the painted size every frame. syncSizeIfNeeded is
++    // a no-op (one bounding-rect read, no rebuild) unless the painted size actually changed, so this
++    // self-corrects on transform/scale changes with no React remount and no app-side wiring.
++    let sizeChanged = false;
++    if (renderer.current && renderer.current.syncSizeIfNeeded) {
++      sizeChanged = renderer.current.syncSizeIfNeeded();
++    }
++    if (redrawRequestsRef.current > 0 || sizeChanged) {
+       redrawRequestsRef.current = 0;
+       if (renderer.current && pictureRef.current) {
+         renderer.current.draw(pictureRef.current);
