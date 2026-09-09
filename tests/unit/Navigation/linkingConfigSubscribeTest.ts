@@ -99,9 +99,19 @@ describe('linkingConfig subscribe', () => {
             mockedHasAuthToken.mockReturnValue(true);
         });
 
-        it('forwards a report deep link, because AuthScreens can handle it', () => {
-            const url = `https://new.expensify.com/r/${REPORT_ID}`;
+        // Report deep links are owned by openReportFromDeepLink() (invoked by DeepLinkHandler on the same warm
+        // `url` event), which navigates through the App's tab-aware handlers. Forwarding it to react-navigation
+        // as well collapses the target and lets preserved tab state override it, landing on Home when a non-Inbox
+        // tab was focused. See #100680.
+        it.each(['https://new.expensify.com/r/269886405016917', 'new-expensify://r/269886405016917', 'https://new.expensify.com/r/269886405016917/details'])(
+            'drops the report deep link %s so openReportFromDeepLink owns it',
+            (url) => {
+                expect(deliverDeepLink(url)).not.toHaveBeenCalled();
+            },
+        );
 
+        // Non-report deep links stay on react-navigation's linking path.
+        it.each(['https://new.expensify.com/settings/profile', `https://new.expensify.com/v/${ACCOUNT_ID}/${VALIDATE_CODE}`])('forwards the non-report deep link %s', (url) => {
             expect(deliverDeepLink(url)).toHaveBeenCalledWith(url);
         });
     });

@@ -1,4 +1,3 @@
-import {hasAuthToken} from '@libs/actions/Session';
 import continuePlaidOAuth from '@libs/continuePlaidOAuth';
 import navigationRef from '@libs/Navigation/navigationRef';
 import type {RootNavigatorParamList} from '@libs/Navigation/types';
@@ -58,11 +57,10 @@ const subscribe: LinkingOptions<RootNavigatorParamList>['subscribe'] = (listener
             continuePlaidOAuth(url);
             return;
         }
-        // For an unauthenticated session, a report deep link (`/r/<reportID>`) targets the Report screen,
-        // which lives in AuthScreens and is not mounted while PublicScreens is showing. Dispatching it here
-        // throws "NAVIGATE ... was not handled by any navigator". openReportFromDeepLink() already opens the
-        // public room as an anonymous user and handles navigation, so defer to it instead. See #92672.
-        if (!hasAuthToken() && getPathnameFromURL(url).includes(`/${ROUTES.REPORT}/`)) {
+        // A report deep link (`/r/<reportID>`) is owned by openReportFromDeepLink() (DeepLinkHandler invokes it on
+        // the same warm `url` event). Forwarding it here would land signed-out users on NotFound (#92672) and
+        // signed-in users on Home from a non-Inbox tab (#100680), so defer to it for both.
+        if (getPathnameFromURL(url).includes(`/${ROUTES.REPORT}/`)) {
             return;
         }
         listener(url);

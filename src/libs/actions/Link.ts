@@ -603,8 +603,9 @@ function openReportFromDeepLink(
                             return;
                         }
 
-                        // Navigation for signed users is handled by react-navigation.
-                        if (isAuthenticated) {
+                        // react-navigation handles signed-in deep links, except a report link (`/r/<id>`): on a warm
+                        // resume from a non-Inbox tab it lands on Home, so we navigate it via Navigation.navigate below. See #100680.
+                        if (isAuthenticated && !reportID) {
                             return;
                         }
 
