@@ -38,6 +38,10 @@ function useReportPrimaryAction(reportID: string | undefined): ValueOf<typeof CO
     const {reportActions} = useMoneyReportTransactionThread();
     const {transactions: reportTransactions, violations} = useTransactionsAndViolationsForReport(moneyRequestReport?.reportID);
 
+    // The duplicate partner can live on a different report, so the review-duplicates guard needs the live, un-scoped collections.
+    const [allTransactions] = useOnyx(ONYXKEYS.COLLECTION.TRANSACTION);
+    const [allTransactionViolations] = useOnyx(ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS);
+
     const isChatReportArchived = useReportIsArchived(chatReport?.reportID);
 
     if (isExpenseReportUtils(moneyRequestReport) && !isGroupPolicy(policy)) {
@@ -69,6 +73,8 @@ function useReportPrimaryAction(reportID: string | undefined): ValueOf<typeof CO
         invoiceReceiverPolicy,
         ownerLogin,
         isOffline,
+        allTransactions,
+        allTransactionViolations,
     });
 }
 

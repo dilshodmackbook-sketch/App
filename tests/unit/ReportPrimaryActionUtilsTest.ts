@@ -2155,6 +2155,71 @@ describe('isReviewDuplicatesAction', () => {
             }),
         ).toBe(false);
     });
+
+    it('should return false when the duplicate partner no longer points back (stale one-sided violation)', async () => {
+        const report = createMock<Report>({
+            reportID: REPORT_ID,
+            type: CONST.REPORT.TYPE.EXPENSE,
+            ownerAccountID: 999,
+            managerID: CURRENT_USER_ACCOUNT_ID,
+            stateNum: CONST.REPORT.STATE_NUM.OPEN,
+            statusNum: CONST.REPORT.STATUS_NUM.OPEN,
+        });
+        await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${REPORT_ID}`, report);
+        const TRANSACTION_ID = 'transactionA';
+        const PARTNER_ID = 'transactionB';
+        const transaction = createMock<Transaction>({transactionID: TRANSACTION_ID, reportID: REPORT_ID});
+        const partner = createMock<Transaction>({transactionID: PARTNER_ID, reportID: 'otherReportID'});
+        await Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${TRANSACTION_ID}`, transaction);
+        await Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${PARTNER_ID}`, partner);
+
+        const allTransactions = {
+            [`${ONYXKEYS.COLLECTION.TRANSACTION}${TRANSACTION_ID}`]: transaction,
+            [`${ONYXKEYS.COLLECTION.TRANSACTION}${PARTNER_ID}`]: partner,
+        };
+        const violations = {
+            [`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${TRANSACTION_ID}`]: [
+                createMock<TransactionViolation>({name: CONST.VIOLATIONS.DUPLICATED_TRANSACTION, data: {duplicates: [PARTNER_ID]}}),
+            ],
+            // The partner keeps no duplicatedTransaction pointing back at TRANSACTION_ID.
+            [`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${PARTNER_ID}`]: [],
+        };
+
+        expect(isReviewDuplicatesAction(report, undefined, [transaction], CURRENT_USER_EMAIL, CURRENT_USER_ACCOUNT_ID, undefined, violations, allTransactions, violations)).toBe(false);
+    });
+
+    it('should return true when both sides of the duplicate pair still point at each other', async () => {
+        const report = createMock<Report>({
+            reportID: REPORT_ID,
+            type: CONST.REPORT.TYPE.EXPENSE,
+            ownerAccountID: 999,
+            managerID: CURRENT_USER_ACCOUNT_ID,
+            stateNum: CONST.REPORT.STATE_NUM.OPEN,
+            statusNum: CONST.REPORT.STATUS_NUM.OPEN,
+        });
+        await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${REPORT_ID}`, report);
+        const TRANSACTION_ID = 'transactionA';
+        const PARTNER_ID = 'transactionB';
+        const transaction = createMock<Transaction>({transactionID: TRANSACTION_ID, reportID: REPORT_ID});
+        const partner = createMock<Transaction>({transactionID: PARTNER_ID, reportID: 'otherReportID'});
+        await Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${TRANSACTION_ID}`, transaction);
+        await Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${PARTNER_ID}`, partner);
+
+        const allTransactions = {
+            [`${ONYXKEYS.COLLECTION.TRANSACTION}${TRANSACTION_ID}`]: transaction,
+            [`${ONYXKEYS.COLLECTION.TRANSACTION}${PARTNER_ID}`]: partner,
+        };
+        const violations = {
+            [`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${TRANSACTION_ID}`]: [
+                createMock<TransactionViolation>({name: CONST.VIOLATIONS.DUPLICATED_TRANSACTION, data: {duplicates: [PARTNER_ID]}}),
+            ],
+            [`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${PARTNER_ID}`]: [
+                createMock<TransactionViolation>({name: CONST.VIOLATIONS.DUPLICATED_TRANSACTION, data: {duplicates: [TRANSACTION_ID]}}),
+            ],
+        };
+
+        expect(isReviewDuplicatesAction(report, undefined, [transaction], CURRENT_USER_EMAIL, CURRENT_USER_ACCOUNT_ID, undefined, violations, allTransactions, violations)).toBe(true);
+    });
 });
 
 describe('getTransactionThreadPrimaryAction', () => {

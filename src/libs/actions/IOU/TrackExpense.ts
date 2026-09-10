@@ -758,7 +758,7 @@ function getDeleteTrackExpenseInformation(
         },
     );
 
-    const successData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT>> = [
+    const successData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS | typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT>> = [
         {
             onyxMethod: Onyx.METHOD.MERGE,
             key: `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${chatReport?.reportID}`,
@@ -771,6 +771,15 @@ function getDeleteTrackExpenseInformation(
         },
     ];
 
+    // Re-assert the cleared violations on success so a stale duplicatedTransaction echoed by the server response
+    // (or a queued OpenReport resolving after the optimistic apply) can't re-introduce a one-sided duplicate warning.
+    // Mirrors the move-into-self-DM handling in changeTransactionsReport.
+    successData.push({
+        onyxMethod: Onyx.METHOD.SET,
+        key: `${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${transactionID}`,
+        value: null,
+    });
+
     // Ensure that any remaining data is removed upon successful completion, even if the server sends a report removal response.
     // This is done to prevent the removal update from lingering in the applyHTTPSOnyxUpdates function.
     successData.push(...cleanUpTransactionThreadReportOnyxData.successData);
@@ -778,6 +787,32 @@ function getDeleteTrackExpenseInformation(
     const failureData: Array<
         OnyxUpdate<typeof ONYXKEYS.COLLECTION.TRANSACTION | typeof ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS | typeof ONYXKEYS.COLLECTION.REPORT | typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS>
     > = [];
+
+    // Drop this transaction from any duplicate partner's one-sided list, with optimistic + success + failure entries,
+    // so the sibling isn't left pointing at an expense that has moved away. Mirrors changeTransactionsReport.
+    const movedDuplicateViolation = transactionViolations?.find((violation) => violation.name === CONST.VIOLATIONS.DUPLICATED_TRANSACTION);
+    // TODO: https://github.com/Expensify/App/issues/66512
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    const allViolationsBySibling = getAllTransactionViolations();
+    for (const siblingID of movedDuplicateViolation?.data?.duplicates ?? []) {
+        const siblingViolations = allViolationsBySibling?.[`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${siblingID}`] ?? [];
+        const siblingDuplicateViolation = siblingViolations.find((violation) => violation.name === CONST.VIOLATIONS.DUPLICATED_TRANSACTION);
+        if (!transactionID || !siblingDuplicateViolation?.data?.duplicates?.includes(transactionID)) {
+            continue;
+        }
+
+        const remainingDuplicateIDs = siblingDuplicateViolation.data.duplicates.filter((duplicateID) => duplicateID !== transactionID);
+        const updatedSiblingViolations = siblingViolations.filter((violation) => violation.name !== CONST.VIOLATIONS.DUPLICATED_TRANSACTION);
+        if (remainingDuplicateIDs.length > 0) {
+            updatedSiblingViolations.push({...siblingDuplicateViolation, data: {...siblingDuplicateViolation.data, duplicates: remainingDuplicateIDs}});
+        }
+
+        const updatedSiblingViolationsValue = updatedSiblingViolations.length > 0 ? updatedSiblingViolations : null;
+        const siblingKey = `${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${siblingID}` as const;
+        optimisticData.push({onyxMethod: Onyx.METHOD.SET, key: siblingKey, value: updatedSiblingViolationsValue});
+        successData.push({onyxMethod: Onyx.METHOD.SET, key: siblingKey, value: updatedSiblingViolationsValue});
+        failureData.push({onyxMethod: Onyx.METHOD.SET, key: siblingKey, value: siblingViolations});
+    }
 
     if (shouldDeleteTransactionFromOnyx && shouldRemoveIOUTransaction) {
         failureData.push({
@@ -1230,7 +1265,7 @@ const getConvertTrackedExpenseInformation = (
     const optimisticData: Array<
         OnyxUpdate<typeof ONYXKEYS.COLLECTION.TRANSACTION | typeof ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS | typeof ONYXKEYS.COLLECTION.REPORT | typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS>
     > = [];
-    const successData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT>> = [];
+    const successData: Array<OnyxUpdate<typeof ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS | typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS | typeof ONYXKEYS.COLLECTION.REPORT>> = [];
     const failureData: Array<
         OnyxUpdate<typeof ONYXKEYS.COLLECTION.TRANSACTION | typeof ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS | typeof ONYXKEYS.COLLECTION.REPORT | typeof ONYXKEYS.COLLECTION.REPORT_ACTIONS>
     > = [];

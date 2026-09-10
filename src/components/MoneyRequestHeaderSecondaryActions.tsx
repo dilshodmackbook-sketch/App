@@ -212,6 +212,8 @@ function MoneyRequestHeaderSecondaryActions({reportID, onBackButtonPress}: Money
     const {currentSearchHash} = useSearchQueryContext();
     const {removeTransaction} = useSearchSelectionActions();
     const {duplicateTransactions, duplicateTransactionViolations} = useDuplicateTransactionsAndViolations(transaction?.transactionID ? [transaction.transactionID] : []);
+    // The duplicate partner can live on a different report, so the review-duplicates guard needs the live, un-scoped transactions collection (allTransactionViolations is already subscribed above).
+    const [allTransactions] = useOnyx(ONYXKEYS.COLLECTION.TRANSACTION);
     const isReportInSearch = route.name === SCREENS.RIGHT_MODAL.SEARCH_REPORT || route.name === SCREENS.RIGHT_MODAL.SEARCH_MONEY_REQUEST_REPORT;
     const {getCurrencyDecimals, getCurrencySymbol} = useCurrencyListActions();
 
@@ -227,7 +229,10 @@ function MoneyRequestHeaderSecondaryActions({reportID, onBackButtonPress}: Money
         report &&
         parentReport &&
         transaction &&
-        getTransactionThreadPrimaryAction(currentUserLogin ?? '', accountID, report, parentReport, parentOwnerLogin, transaction, transactionViolations, policy, false)
+        getTransactionThreadPrimaryAction(currentUserLogin ?? '', accountID, report, parentReport, parentOwnerLogin, transaction, transactionViolations, policy, false, {
+            allTransactions,
+            allTransactionViolations,
+        })
     );
     const activePolicyExpenseChat = getPolicyExpenseChat(accountID, defaultExpensePolicy?.id);
     const isPerDiemRequestOnNonDefaultWorkspace = isPerDiemRequest(transaction) && defaultExpensePolicy?.id !== policy?.id;

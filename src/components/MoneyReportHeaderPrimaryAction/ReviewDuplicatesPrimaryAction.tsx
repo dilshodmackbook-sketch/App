@@ -36,6 +36,7 @@ function ReviewDuplicatesPrimaryAction({reportID, chatReportID}: SimpleActionPro
     const [conciergeReportID] = useOnyx(ONYXKEYS.CONCIERGE_REPORT_ID);
     const [conciergeChat] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT}${conciergeReportID}`);
     const [allTransactionViolations] = useOnyx(ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS);
+    const [allTransactions] = useOnyx(ONYXKEYS.COLLECTION.TRANSACTION);
     const [ownerLogin] = useOnyx(ONYXKEYS.PERSONAL_DETAILS_LIST, {selector: personalDetailsLoginSelector(moneyRequestReport?.ownerAccountID)});
 
     const {transactions: reportTransactionsMap} = useTransactionsAndViolationsForReport(moneyRequestReport?.reportID);
@@ -50,6 +51,8 @@ function ReviewDuplicatesPrimaryAction({reportID, chatReportID}: SimpleActionPro
             ownerLogin,
             policy,
             allTransactionViolations?.[ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS + reportTransaction.transactionID],
+            allTransactions,
+            allTransactionViolations,
         ),
     );
     const duplicateIOUAction = getIOUActionForReportID(moneyRequestReport?.reportID, duplicateTransaction?.transactionID);

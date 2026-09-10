@@ -82,10 +82,24 @@ function MoneyRequestHeaderPrimaryAction({reportID}: MoneyRequestHeaderPrimaryAc
     const [rawTransactionViolations] = useOnyx(`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${transaction?.transactionID}`);
     const {duplicateTransactions} = useDuplicateTransactionsAndViolations(transaction?.transactionID ? [transaction.transactionID] : []);
     const [isTrackIntentUser] = useOnyx(ONYXKEYS.NVP_INTRO_SELECTED, {selector: isTrackIntentUserSelector});
+    // The duplicate partner can live on a different report, so the review-duplicates guard needs the live, un-scoped collections.
+    const [allTransactions] = useOnyx(ONYXKEYS.COLLECTION.TRANSACTION);
+    const [allTransactionViolations] = useOnyx(ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS);
 
     const primaryAction =
         report && parentReport && transaction
-            ? getTransactionThreadPrimaryAction(currentUserLogin ?? '', accountID, report, parentReport, parentOwnerLogin, transaction, transactionViolations, policy, isFromReviewDuplicates)
+            ? getTransactionThreadPrimaryAction(
+                  currentUserLogin ?? '',
+                  accountID,
+                  report,
+                  parentReport,
+                  parentOwnerLogin,
+                  transaction,
+                  transactionViolations,
+                  policy,
+                  isFromReviewDuplicates,
+                  {allTransactions, allTransactionViolations},
+              )
             : '';
 
     const renderButton = () => {

@@ -86,6 +86,9 @@ type GetReportPrimaryActionParams = {
     ownerLogin: string | undefined;
     /** TODO: Should be a required field in the future. Refactor issue: https://github.com/Expensify/App/issues/66407 */
     isOffline?: boolean;
+    /** Live Onyx collections used to validate that a duplicatedTransaction violation still describes a real, mutual group */
+    allTransactions?: OnyxCollection<Transaction>;
+    allTransactionViolations?: OnyxCollection<TransactionViolation[]>;
 };
 
 type IsPrimaryPayActionParams = {
@@ -365,9 +368,21 @@ function isReviewDuplicatesAction(
     currentUserAccountID: number,
     policy: Policy | undefined,
     violations: OnyxCollection<TransactionViolation[]>,
+    allTransactions?: OnyxCollection<Transaction>,
+    allTransactionViolations?: OnyxCollection<TransactionViolation[]>,
 ) {
     const hasDuplicates = reportTransactions.some((transaction) =>
-        isDuplicate(transaction, currentUserEmail, currentUserAccountID, report, ownerLogin, policy, violations?.[ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS + transaction.transactionID]),
+        isDuplicate(
+            transaction,
+            currentUserEmail,
+            currentUserAccountID,
+            report,
+            ownerLogin,
+            policy,
+            violations?.[ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS + transaction.transactionID],
+            allTransactions,
+            allTransactionViolations,
+        ),
     );
 
     if (!hasDuplicates) {
@@ -498,6 +513,8 @@ function getReportPrimaryAction(params: GetReportPrimaryActionParams): ValueOf<t
         invoiceReceiverPolicy,
         ownerLogin,
         isOffline,
+        allTransactions,
+        allTransactionViolations,
     } = params;
 
     // The expense report of personal policy shouldn't have any action
@@ -529,7 +546,7 @@ function getReportPrimaryAction(params: GetReportPrimaryActionParams): ValueOf<t
         return CONST.REPORT.PRIMARY_ACTIONS.MARK_AS_CASH;
     }
 
-    if (isReviewDuplicatesAction(report, ownerLogin, reportTransactions, currentUserLogin, currentUserAccountID, policy, violations)) {
+    if (isReviewDuplicatesAction(report, ownerLogin, reportTransactions, currentUserLogin, currentUserAccountID, policy, violations, allTransactions, allTransactionViolations)) {
         return CONST.REPORT.PRIMARY_ACTIONS.REVIEW_DUPLICATES;
     }
 
@@ -629,6 +646,7 @@ function getTransactionThreadPrimaryAction(
     violations: TransactionViolation[],
     policy: OnyxEntry<Policy>,
     isFromReviewDuplicates: boolean,
+    duplicateContext?: {allTransactions?: OnyxCollection<Transaction>; allTransactionViolations?: OnyxCollection<TransactionViolation[]>},
 ): ValueOf<typeof CONST.REPORT.TRANSACTION_PRIMARY_ACTIONS> | '' {
     if (isMarkAsResolvedAction(parentReport, violations, policy)) {
         return CONST.REPORT.TRANSACTION_PRIMARY_ACTIONS.MARK_AS_RESOLVED;
@@ -642,7 +660,19 @@ function getTransactionThreadPrimaryAction(
         [`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${reportTransaction.transactionID}`]: violations,
     };
 
-    if (isReviewDuplicatesAction(parentReport, parentOwnerLogin, [reportTransaction], currentUserLogin, currentUserAccountID, policy, transactionViolations)) {
+    if (
+        isReviewDuplicatesAction(
+            parentReport,
+            parentOwnerLogin,
+            [reportTransaction],
+            currentUserLogin,
+            currentUserAccountID,
+            policy,
+            transactionViolations,
+            duplicateContext?.allTransactions,
+            duplicateContext?.allTransactionViolations,
+        )
+    ) {
         return isFromReviewDuplicates ? CONST.REPORT.TRANSACTION_PRIMARY_ACTIONS.KEEP_THIS_ONE : CONST.REPORT.TRANSACTION_PRIMARY_ACTIONS.REVIEW_DUPLICATES;
     }
 

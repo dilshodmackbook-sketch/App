@@ -2376,7 +2376,38 @@ function getRecentTransactions(transactions: Record<string, string>, size = 2): 
 }
 
 /**
+ * Whether a transaction's duplicatedTransaction violation still describes a real, reviewable, mutual duplicate group.
+ *
+ * A duplicate group is mutual: every member carries a duplicatedTransaction violation naming the others. After an
+ * expense is moved out of the self DM (or any one-sided churn from queued OpenReport responses), one side can keep a
+ * violation pointing at a partner that no longer points back. Such a leftover has nothing to review against, so we
+ * require at least one still-valid partner that lists this transaction in its own duplicatedTransaction violation.
+ * The partner may live on a different report, so the collections passed here must be the live Onyx ones, not a
+ * Search snapshot.
+ */
+function hasReviewableDuplicateGroup(
+    transactionID: string,
+    transactionViolation: TransactionViolation[],
+    allTransactions: OnyxCollection<Transaction>,
+    allTransactionViolations: OnyxCollection<TransactionViolations>,
+): boolean {
+    const validPartnerIDs = getValidDuplicateTransactionIDs(transactionID, allTransactions, transactionViolation);
+    for (const partnerID of validPartnerIDs) {
+        const partnerViolations = allTransactionViolations?.[`${ONYXKEYS.COLLECTION.TRANSACTION_VIOLATIONS}${partnerID}`];
+        const partnerDuplicateViolation = partnerViolations?.find((violation) => violation.name === CONST.VIOLATIONS.DUPLICATED_TRANSACTION);
+        if (partnerDuplicateViolation?.data?.duplicates?.includes(transactionID)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Check if transaction has duplicatedTransaction violation.
+ *
+ * When the live `allTransactions` and `allTransactionViolations` collections are supplied, the violation is also
+ * validated: it must still resolve to a real, reviewable, mutually-pointing duplicate group. Callers that omit them
+ * keep the original presence-only behavior.
  * @param transactionID - the transaction to check
  */
 function isDuplicate(
@@ -2387,6 +2418,8 @@ function isDuplicate(
     iouReportOwnerLogin: string | undefined,
     policy: OnyxEntry<Policy>,
     transactionViolation: OnyxEntry<TransactionViolations>,
+    allTransactions?: OnyxCollection<Transaction>,
+    allTransactionViolations?: OnyxCollection<TransactionViolations>,
 ): boolean {
     if (!transaction) {
         return false;
@@ -2404,7 +2437,16 @@ function isDuplicate(
         policy,
     );
 
-    return hasDuplicatedTransactionViolation && !isDuplicatedTransactionViolationDismissed;
+    if (!hasDuplicatedTransactionViolation || isDuplicatedTransactionViolationDismissed) {
+        return false;
+    }
+
+    // When the live collections are available, drop leftover one-sided violations that no longer describe a real group.
+    if (allTransactions && allTransactionViolations) {
+        return hasReviewableDuplicateGroup(transaction.transactionID, transactionViolation ?? [], allTransactions, allTransactionViolations);
+    }
+
+    return true;
 }
 
 /**
