@@ -4,7 +4,6 @@ import CollapsibleHeaderOnKeyboard from '@components/CollapsibleHeaderOnKeyboard
 import FixedFooter from '@components/FixedFooter';
 import FormHelpMessage from '@components/FormHelpMessage';
 import Icon from '@components/Icon';
-import OnboardingHeader from '@components/OnboardingHeader';
 import {PressableWithoutFeedback} from '@components/Pressable';
 import RadioButtonWithLabel from '@components/RadioButtonWithLabel';
 import ScreenWrapper from '@components/ScreenWrapper';
@@ -26,6 +25,7 @@ import useThemeStyles from '@hooks/useThemeStyles';
 import {setOnboardingAccountingEnabled, setOnboardingAdminsChatReportID, setOnboardingPolicyID, setOnboardingUserReportedIntegration} from '@libs/actions/Welcome';
 import {getDefaultOnboardingFeaturesMap} from '@libs/actions/Welcome/OnboardingFeatures';
 import {isMobileSafari} from '@libs/Browser';
+import {useOnboardingHeaderConfig} from '@libs/Navigation/AppNavigator/Navigators/OnboardingModalNavigatorContentWrapper/OnboardingHeaderContext';
 import Navigation from '@libs/Navigation/Navigation';
 import {isGroupPolicy, isPolicyAdmin} from '@libs/PolicyUtils';
 
@@ -129,6 +129,8 @@ function BaseOnboardingAccounting({shouldUseNativeStyles}: BaseOnboardingAccount
     const [session] = useOnyx(ONYXKEYS.SESSION);
     const [onboardingUserReportedIntegration] = useOnyx(ONYXKEYS.ONBOARDING_USER_REPORTED_INTEGRATION);
     const [onboardingFeaturesMap] = useOnyx(ONYXKEYS.ONBOARDING_INTERESTED_FEATURES_MAP);
+
+    useOnboardingHeaderConfig({shouldShowBackButton: true, onBackButtonPress: () => Navigation.goBack(ROUTES.ONBOARDING_INTERESTED_FEATURES.getRoute())});
 
     const isKnownIntegration = isIntegrationKey(onboardingUserReportedIntegration);
     let initialSelectedIntegration: AccountingOptionKey | undefined;
@@ -287,13 +289,13 @@ function BaseOnboardingAccounting({shouldUseNativeStyles}: BaseOnboardingAccount
 
     return (
         <ScreenWrapper
+            includePaddingTop={false}
             testID="BaseOnboardingAccounting"
             style={[styles.defaultModalContainer, shouldUseNativeStyles && styles.pt8]}
             shouldEnableMaxHeight={!isMobileSafari()}
             shouldAvoidScrollOnVirtualViewport={!isMobileSafari()}
         >
             <CollapsibleHeaderOnKeyboard>
-                <OnboardingHeader onBackButtonPress={() => Navigation.goBack(ROUTES.ONBOARDING_INTERESTED_FEATURES.getRoute())} />
                 <View style={[onboardingIsMediumOrLargerScreenWidth && styles.mt5, onboardingIsMediumOrLargerScreenWidth ? styles.mh8 : styles.mh5]}>
                     <Text
                         style={[styles.textHeadlineH1, styles.mb5]}

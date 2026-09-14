@@ -1,7 +1,6 @@
 import Button from '@components/Button';
 import ButtonDisabledWhenOffline from '@components/Button/composed/ButtonDisabledWhenOffline';
 import LinkButton from '@components/Button/composed/LinkButton';
-import OnboardingHeader from '@components/OnboardingHeader';
 import ScreenWrapper from '@components/ScreenWrapper';
 import SelectionList from '@components/SelectionList';
 import BareUserListItem from '@components/SelectionList/ListItem/BareUserListItem';
@@ -18,6 +17,7 @@ import useTheme from '@hooks/useTheme';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {navigateAfterOnboardingWithMicrotaskQueue, navigateToSubmitWorkspaceAfterOnboardingWithMicrotaskQueue} from '@libs/navigateAfterOnboarding';
+import {useOnboardingHeaderConfig} from '@libs/Navigation/AppNavigator/Navigators/OnboardingModalNavigatorContentWrapper/OnboardingHeaderContext';
 import Navigation from '@libs/Navigation/Navigation';
 import {expensifyLoginsSelector, isCurrentUserValidated} from '@libs/UserUtils';
 
@@ -166,18 +166,17 @@ function BaseOnboardingWorkspaces({route, shouldUseNativeStyles}: BaseOnboarding
         Navigation.navigate(ROUTES.ONBOARDING_PURPOSE.getRoute(route.params?.backTo));
     };
 
+    useOnboardingHeaderConfig({shouldShowBackButton: !shouldHideBackButton, onBackButtonPress: () => Navigation.goBack()});
+
     return (
         <ScreenWrapper
+            includePaddingTop={false}
             includeSafeAreaPaddingBottom
             shouldEnableMaxHeight
             testID="BaseOnboardingWorkspaces"
             style={[styles.defaultModalContainer, shouldUseNativeStyles && styles.pt8]}
             shouldShowOfflineIndicator={isSmallScreenWidth}
         >
-            <OnboardingHeader
-                shouldShowBackButton={!shouldHideBackButton}
-                onBackButtonPress={() => Navigation.goBack()}
-            />
             <SelectionList
                 data={policyIDItems}
                 onSelectRow={() => {}}
