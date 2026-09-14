@@ -569,7 +569,7 @@
 "../../src/libs/actions/IOU/UpdateMoneyRequest.ts"	"@typescript-eslint/no-deprecated/getReportTransactions"	1
 "../../src/libs/actions/IOU/UpdateMoneyRequest.ts"	"@typescript-eslint/no-unsafe-type-assertion"	2
 "../../src/libs/actions/IOU/UpdateMoneyRequest.ts"	"no-restricted-syntax"	1
-"../../src/libs/actions/Link.ts"	"@typescript-eslint/no-unsafe-type-assertion"	4
+"../../src/libs/actions/Link.ts"	"@typescript-eslint/no-unsafe-type-assertion"	5
 "../../src/libs/actions/Link.ts"	"no-restricted-syntax"	3
 "../../src/libs/actions/MapboxToken.ts"	"no-restricted-syntax"	2
 "../../src/libs/actions/MergeAccounts.ts"	"no-restricted-syntax"	1

@@ -3,6 +3,7 @@ import {handleRHPVariantNavigation, shouldOpenRHPVariant} from '@components/Side
 import CONST from '@src/CONST';
 import ONYXKEYS from '@src/ONYXKEYS';
 import ROUTES from '@src/ROUTES';
+import type {Route} from '@src/ROUTES';
 import type {OnboardingRHPVariant, ReportNameValuePairs} from '@src/types/onyx';
 
 import type {OnyxCollection, OnyxEntry} from 'react-native-onyx';
@@ -26,6 +27,15 @@ Onyx.connectWithoutView({
         onboardingRHPVariant = value;
     },
 });
+
+// A deep link captured before a fresh sign-up finished onboarding is dropped by openReportFromDeepLink to avoid the
+// #91437 "Not here" flash. We stash it here instead and replay it once, from navigateAfterOnboarding, after the
+// onboarding modal is torn down. In-memory is enough: capture and onboarding completion happen in one session.
+let pendingDeeplinkRoute: Route | undefined;
+
+function setPendingDeeplinkRoute(route: Route | undefined) {
+    pendingDeeplinkRoute = route;
+}
 
 type NavigateAfterOnboardingOptions = {
     afterTransition?: () => void;
@@ -86,6 +96,15 @@ function navigateAfterOnboarding(
     // This check is outside shouldOpenRHPVariant because that function returns false on native
     // (Side Panel doesn't exist on native), but we still need to navigate to Concierge on mobile.
     const navigationOptions = options?.afterTransition ? {afterTransition: options.afterTransition} : undefined;
+
+    // A deep link the user explicitly opened (e.g. /concierge on a fresh sign-up) wins over the default
+    // post-onboarding destination. Consume it here, above every variant branch, so it is honored for all variants.
+    if (pendingDeeplinkRoute) {
+        const route = pendingDeeplinkRoute;
+        setPendingDeeplinkRoute(undefined);
+        Navigation.navigate(route, navigationOptions);
+        return;
+    }
     const variantOverride = options?.variantOverride;
     const variant = variantOverride ?? onboardingRHPVariant;
     if (isSmallScreenWidth && variant === CONST.ONBOARDING_RHP_VARIANT.TRACK_EXPENSES_WITH_CONCIERGE) {
@@ -164,4 +183,4 @@ function navigateToSubmitWorkspaceAfterOnboardingWithMicrotaskQueue(policyID?: s
     });
 }
 
-export {navigateAfterOnboarding, navigateAfterOnboardingWithMicrotaskQueue, navigateToSubmitWorkspaceAfterOnboardingWithMicrotaskQueue};
+export {navigateAfterOnboarding, navigateAfterOnboardingWithMicrotaskQueue, navigateToSubmitWorkspaceAfterOnboardingWithMicrotaskQueue, setPendingDeeplinkRoute};

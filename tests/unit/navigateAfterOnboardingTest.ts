@@ -1,4 +1,4 @@
-import {navigateAfterOnboarding} from '@libs/navigateAfterOnboarding';
+import {navigateAfterOnboarding, setPendingDeeplinkRoute} from '@libs/navigateAfterOnboarding';
 import Navigation from '@libs/Navigation/Navigation';
 import type * as ReportUtils from '@libs/ReportUtils';
 
@@ -89,6 +89,7 @@ describe('navigateAfterOnboarding', () => {
     beforeEach(async () => {
         jest.clearAllMocks();
         mockIsReportTopmostSplitNavigator.mockReturnValue(false);
+        setPendingDeeplinkRoute(undefined);
         return Onyx.clear();
     });
 
@@ -189,6 +190,44 @@ describe('navigateAfterOnboarding', () => {
     it('should navigate to the admin room when the inboxAdminsBespoke variant is assigned', () => {
         const navigate = jest.spyOn(Navigation, 'navigate');
         navigateAfterOnboarding(false, true, '', {}, undefined, ONBOARDING_ADMINS_CHAT_REPORT_ID, false, {variantOverride: CONST.ONBOARDING_RHP_VARIANT.INBOX_ADMINS_BESPOKE});
+        expect(navigate).toHaveBeenCalledWith(ROUTES.REPORT_WITH_ID.getRoute(ONBOARDING_ADMINS_CHAT_REPORT_ID), undefined);
+    });
+
+    it('should replay a pending deep link captured before onboarding instead of the default destination', () => {
+        const navigate = jest.spyOn(Navigation, 'navigate');
+
+        // A /concierge deep link captured before a fresh sign-up finished onboarding.
+        setPendingDeeplinkRoute(ROUTES.CONCIERGE);
+        navigateAfterOnboarding(false, true, '', {}, undefined, ONBOARDING_ADMINS_CHAT_REPORT_ID);
+
+        expect(navigate).toHaveBeenCalledWith(ROUTES.CONCIERGE, undefined);
+        // The pending deep link wins over the admins room / HOME fallback.
+        expect(navigate).not.toHaveBeenCalledWith(ROUTES.REPORT_WITH_ID.getRoute(ONBOARDING_ADMINS_CHAT_REPORT_ID), undefined);
+        expect(navigate).not.toHaveBeenCalledWith(ROUTES.HOME, undefined);
+    });
+
+    it('should replay a pending deep link before any RHP variant branch', () => {
+        const navigate = jest.spyOn(Navigation, 'navigate');
+
+        setPendingDeeplinkRoute(ROUTES.CONCIERGE);
+        navigateAfterOnboarding(false, true, '', {}, undefined, ONBOARDING_ADMINS_CHAT_REPORT_ID, false, {variantOverride: CONST.ONBOARDING_RHP_VARIANT.INBOX_ADMINS_BESPOKE});
+
+        expect(navigate).toHaveBeenCalledWith(ROUTES.CONCIERGE, undefined);
+        expect(navigate).not.toHaveBeenCalledWith(ROUTES.REPORT_WITH_ID.getRoute(ONBOARDING_ADMINS_CHAT_REPORT_ID), undefined);
+    });
+
+    it('should consume the pending deep link only once', () => {
+        const navigate = jest.spyOn(Navigation, 'navigate');
+
+        setPendingDeeplinkRoute(ROUTES.CONCIERGE);
+        navigateAfterOnboarding(false, true, '', {}, undefined, ONBOARDING_ADMINS_CHAT_REPORT_ID);
+        expect(navigate).toHaveBeenCalledWith(ROUTES.CONCIERGE, undefined);
+
+        navigate.mockClear();
+
+        // Without a fresh pending route, the next call uses the normal destination.
+        navigateAfterOnboarding(false, true, '', {}, undefined, ONBOARDING_ADMINS_CHAT_REPORT_ID);
+        expect(navigate).not.toHaveBeenCalledWith(ROUTES.CONCIERGE, undefined);
         expect(navigate).toHaveBeenCalledWith(ROUTES.REPORT_WITH_ID.getRoute(ONBOARDING_ADMINS_CHAT_REPORT_ID), undefined);
     });
 });

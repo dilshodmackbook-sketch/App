@@ -6,6 +6,7 @@ import * as Environment from '@libs/Environment/Environment';
 import getIsNarrowLayout from '@libs/getIsNarrowLayout';
 import isPublicScreenRoute from '@libs/isPublicScreenRoute';
 import Log from '@libs/Log';
+import {setPendingDeeplinkRoute} from '@libs/navigateAfterOnboarding';
 import getStateFromPath from '@libs/Navigation/helpers/getStateFromPath';
 import {isOnboardingFlowName} from '@libs/Navigation/helpers/isNavigatorName';
 import normalizePath from '@libs/Navigation/helpers/normalizePath';
@@ -574,6 +575,11 @@ function openReportFromDeepLink(
                 // Capture once. Use the raw flag, not the selector, which returns `true` for the empty NVP a fresh sign-up briefly has.
                 if (!isAuthenticated && initialHasCompletedGuidedSetupFlow === undefined && val && !isAnonymousUser()) {
                     initialHasCompletedGuidedSetupFlow = val.hasCompletedGuidedSetupFlow;
+                    // The drop branches below discard this deep link for a fresh sign-up. Stash it so navigateAfterOnboarding
+                    // can replay it after the onboarding modal tears down, which avoids the #91437 "Not here" flash.
+                    if (initialHasCompletedGuidedSetupFlow === false && route && !shouldSkipDeepLinkNavigation(route)) {
+                        setPendingDeeplinkRoute(route as Route);
+                    }
                 }
 
                 Navigation.waitForProtectedRoutes().then(() => {
