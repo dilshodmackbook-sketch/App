@@ -18,7 +18,7 @@ import {
     getReasonAndReportActionThatRequiresAttention,
     getReportPreviewReportActionMessage,
 } from '@libs/ReportUtils';
-import SidebarUtils, {_buildSortKey, _categorizeReportsForLHN, _combineReportCategories, _sortCategorizedReports} from '@libs/SidebarUtils';
+import SidebarUtils, {_categorizeReportsForLHN, _combineReportCategories, _sortCategorizedReports} from '@libs/SidebarUtils';
 
 import initOnyxDerivedValues from '@userActions/OnyxDerived';
 
@@ -4221,24 +4221,24 @@ describe('SidebarUtils', () => {
                 // Given the reports are created
                 const categories = {
                     pinnedAndGBRReports: [
-                        {reportID: '1', displayName: 'Zebra', sortKey: 'zebra', lastVisibleActionCreated: '2024-01-01 10:00:00'},
-                        {reportID: '2', displayName: 'Alpha', sortKey: 'alpha', lastVisibleActionCreated: '2024-01-02 10:00:00'},
+                        {reportID: '1', displayName: 'Zebra', lastVisibleActionCreated: '2024-01-01 10:00:00'},
+                        {reportID: '2', displayName: 'Alpha', lastVisibleActionCreated: '2024-01-02 10:00:00'},
                     ],
                     errorReports: [
-                        {reportID: '3', displayName: 'Charlie', sortKey: 'charlie', lastVisibleActionCreated: '2024-01-03 10:00:00'},
-                        {reportID: '4', displayName: 'Beta', sortKey: 'beta', lastVisibleActionCreated: '2024-01-04 10:00:00'},
+                        {reportID: '3', displayName: 'Charlie', lastVisibleActionCreated: '2024-01-03 10:00:00'},
+                        {reportID: '4', displayName: 'Beta', lastVisibleActionCreated: '2024-01-04 10:00:00'},
                     ],
                     draftReports: [
-                        {reportID: '5', displayName: 'Echo', sortKey: 'echo', lastVisibleActionCreated: '2024-01-05 10:00:00'},
-                        {reportID: '6', displayName: 'Delta', sortKey: 'delta', lastVisibleActionCreated: '2024-01-06 10:00:00'},
+                        {reportID: '5', displayName: 'Echo', lastVisibleActionCreated: '2024-01-05 10:00:00'},
+                        {reportID: '6', displayName: 'Delta', lastVisibleActionCreated: '2024-01-06 10:00:00'},
                     ],
                     nonArchivedReports: [
-                        {reportID: '7', displayName: 'Hotel', sortKey: 'hotel', lastVisibleActionCreated: '2024-01-07 10:00:00'},
-                        {reportID: '8', displayName: 'Golf', sortKey: 'golf', lastVisibleActionCreated: '2024-01-08 10:00:00'},
+                        {reportID: '7', displayName: 'Hotel', lastVisibleActionCreated: '2024-01-07 10:00:00'},
+                        {reportID: '8', displayName: 'Golf', lastVisibleActionCreated: '2024-01-08 10:00:00'},
                     ],
                     archivedReports: [
-                        {reportID: '9', displayName: 'India', sortKey: 'india', lastVisibleActionCreated: '2024-01-09 10:00:00'},
-                        {reportID: '10', displayName: 'Juliet', sortKey: 'juliet', lastVisibleActionCreated: '2024-01-10 10:00:00'},
+                        {reportID: '9', displayName: 'India', lastVisibleActionCreated: '2024-01-09 10:00:00'},
+                        {reportID: '10', displayName: 'Juliet', lastVisibleActionCreated: '2024-01-10 10:00:00'},
                     ],
                 };
 
@@ -4270,24 +4270,24 @@ describe('SidebarUtils', () => {
                 // Given the reports are created
                 const categories = {
                     pinnedAndGBRReports: [
-                        {reportID: '1', displayName: 'Zebra', sortKey: 'zebra', lastVisibleActionCreated: '2024-01-01 10:00:00'},
-                        {reportID: '2', displayName: 'Alpha', sortKey: 'alpha', lastVisibleActionCreated: '2024-01-02 10:00:00'},
+                        {reportID: '1', displayName: 'Zebra', lastVisibleActionCreated: '2024-01-01 10:00:00'},
+                        {reportID: '2', displayName: 'Alpha', lastVisibleActionCreated: '2024-01-02 10:00:00'},
                     ],
                     errorReports: [
-                        {reportID: '3', displayName: 'Charlie', sortKey: 'charlie', lastVisibleActionCreated: '2024-01-03 10:00:00'},
-                        {reportID: '4', displayName: 'Beta', sortKey: 'beta', lastVisibleActionCreated: '2024-01-04 10:00:00'},
+                        {reportID: '3', displayName: 'Charlie', lastVisibleActionCreated: '2024-01-03 10:00:00'},
+                        {reportID: '4', displayName: 'Beta', lastVisibleActionCreated: '2024-01-04 10:00:00'},
                     ],
                     draftReports: [
-                        {reportID: '5', displayName: 'Echo', sortKey: 'echo', lastVisibleActionCreated: '2024-01-05 10:00:00'},
-                        {reportID: '6', displayName: 'Delta', sortKey: 'delta', lastVisibleActionCreated: '2024-01-06 10:00:00'},
+                        {reportID: '5', displayName: 'Echo', lastVisibleActionCreated: '2024-01-05 10:00:00'},
+                        {reportID: '6', displayName: 'Delta', lastVisibleActionCreated: '2024-01-06 10:00:00'},
                     ],
                     nonArchivedReports: [
-                        {reportID: '7', displayName: 'Hotel', sortKey: 'hotel', lastVisibleActionCreated: '2024-01-07 10:00:00'},
-                        {reportID: '8', displayName: 'Golf', sortKey: 'golf', lastVisibleActionCreated: '2024-01-08 10:00:00'},
+                        {reportID: '7', displayName: 'Hotel', lastVisibleActionCreated: '2024-01-07 10:00:00'},
+                        {reportID: '8', displayName: 'Golf', lastVisibleActionCreated: '2024-01-08 10:00:00'},
                     ],
                     archivedReports: [
-                        {reportID: '9', displayName: 'India', sortKey: 'india', lastVisibleActionCreated: '2024-01-09 10:00:00'},
-                        {reportID: '10', displayName: 'Juliet', sortKey: 'juliet', lastVisibleActionCreated: '2024-01-10 10:00:00'},
+                        {reportID: '9', displayName: 'India', lastVisibleActionCreated: '2024-01-09 10:00:00'},
+                        {reportID: '10', displayName: 'Juliet', lastVisibleActionCreated: '2024-01-10 10:00:00'},
                     ],
                 };
 
@@ -4319,8 +4319,8 @@ describe('SidebarUtils', () => {
                 // Given the reports are created
                 const categories = {
                     pinnedAndGBRReports: [
-                        {reportID: '1', displayName: '', sortKey: '', lastVisibleActionCreated: '2024-01-01 10:00:00'},
-                        {reportID: '2', displayName: 'Alpha', sortKey: 'alpha', lastVisibleActionCreated: '2024-01-02 10:00:00'},
+                        {reportID: '1', displayName: '', lastVisibleActionCreated: '2024-01-01 10:00:00'},
+                        {reportID: '2', displayName: 'Alpha', lastVisibleActionCreated: '2024-01-02 10:00:00'},
                     ],
                     errorReports: [],
                     draftReports: [],
@@ -4342,8 +4342,8 @@ describe('SidebarUtils', () => {
                     errorReports: [],
                     draftReports: [],
                     nonArchivedReports: [
-                        {reportID: '1', displayName: 'Alpha', sortKey: 'alpha', lastVisibleActionCreated: undefined},
-                        {reportID: '2', displayName: 'Beta', sortKey: 'beta', lastVisibleActionCreated: '2024-01-02 10:00:00'},
+                        {reportID: '1', displayName: 'Alpha', lastVisibleActionCreated: undefined},
+                        {reportID: '2', displayName: 'Beta', lastVisibleActionCreated: '2024-01-02 10:00:00'},
                     ],
                     archivedReports: [],
                 };
@@ -4357,27 +4357,46 @@ describe('SidebarUtils', () => {
             });
         });
 
-        describe('buildSortKey', () => {
-            it('should sort accented characters by Unicode code point, not locale-aware order', () => {
-                // Given names with accented characters
-                const cafeAccented = _buildSortKey('Café');
-                const cafePlain = _buildSortKey('Cafe');
+        describe('locale-aware display name sorting', () => {
+            const emptyCategories = {pinnedAndGBRReports: [], errorReports: [], draftReports: [], nonArchivedReports: [], archivedReports: []};
 
-                // Then accented "é" sorts after plain "e" by code point
-                expect(cafeAccented > cafePlain).toBe(true);
+            it('should sort names with locale-specific letters by the user locale, not by UTF-16 code point', () => {
+                // Given pinned reports whose names mix ASCII and accented initial letters, sorted with a Spanish collator
+                const spanishCollator = new Intl.Collator('es', {numeric: true, caseFirst: 'upper'});
+                const mockLocaleCompare = (a: string, b: string) => spanishCollator.compare(a, b);
+                const categories = {
+                    ...emptyCategories,
+                    pinnedAndGBRReports: [
+                        {reportID: '1', displayName: 'Zote Report', lastVisibleActionCreated: '2024-01-01 10:00:00'},
+                        {reportID: '2', displayName: 'Nuevo Budget', lastVisibleActionCreated: '2024-01-02 10:00:00'},
+                        {reportID: '3', displayName: 'Ñu Safari', lastVisibleActionCreated: '2024-01-03 10:00:00'},
+                    ],
+                };
+
+                // When the reports are sorted
+                const result = _sortCategorizedReports(categories, true, mockLocaleCompare);
+
+                // Then "Ñ" sorts after "N" (Spanish alphabet) instead of being pushed past "Z" by its code point (U+00F1)
+                expect(result.pinnedAndGBRReports.map((report) => report.displayName)).toEqual(['Nuevo Budget', 'Ñu Safari', 'Zote Report']);
             });
 
-            it('should be case-insensitive', () => {
-                expect(_buildSortKey('Alpha')).toBe(_buildSortKey('alpha'));
-                expect(_buildSortKey('ZEBRA')).toBe(_buildSortKey('zebra'));
-            });
+            it('should keep numeric ordering (Report 2 before Report 10) through the numeric collator', () => {
+                // Given pinned reports whose names end in numbers, sorted with a numeric collator
+                const numericCollator = new Intl.Collator('en', {numeric: true, caseFirst: 'upper'});
+                const mockLocaleCompare = (a: string, b: string) => numericCollator.compare(a, b);
+                const categories = {
+                    ...emptyCategories,
+                    pinnedAndGBRReports: [
+                        {reportID: '1', displayName: 'Report 10', lastVisibleActionCreated: '2024-01-01 10:00:00'},
+                        {reportID: '2', displayName: 'Report 2', lastVisibleActionCreated: '2024-01-02 10:00:00'},
+                    ],
+                };
 
-            it('should zero-pad numeric segments for natural sort order', () => {
-                const report2 = _buildSortKey('Report 2');
-                const report10 = _buildSortKey('Report 10');
+                // When the reports are sorted
+                const result = _sortCategorizedReports(categories, true, mockLocaleCompare);
 
                 // Then "Report 2" sorts before "Report 10"
-                expect(report2 < report10).toBe(true);
+                expect(result.pinnedAndGBRReports.map((report) => report.displayName)).toEqual(['Report 2', 'Report 10']);
             });
         });
 
@@ -4385,24 +4404,24 @@ describe('SidebarUtils', () => {
             it('should combine categories in correct order', () => {
                 // Given the reports are created
                 const pinnedAndGBRReports = [
-                    {reportID: '1', displayName: 'Pinned 1', sortKey: 'pinned 000000000000001'},
-                    {reportID: '2', displayName: 'Pinned 2', sortKey: 'pinned 000000000000002'},
+                    {reportID: '1', displayName: 'Pinned 1'},
+                    {reportID: '2', displayName: 'Pinned 2'},
                 ];
                 const errorReports = [
-                    {reportID: '3', displayName: 'Error 1', sortKey: 'error 000000000000001'},
-                    {reportID: '4', displayName: 'Error 2', sortKey: 'error 000000000000002'},
+                    {reportID: '3', displayName: 'Error 1'},
+                    {reportID: '4', displayName: 'Error 2'},
                 ];
                 const draftReports = [
-                    {reportID: '5', displayName: 'Draft 1', sortKey: 'draft 000000000000001'},
-                    {reportID: '6', displayName: 'Draft 2', sortKey: 'draft 000000000000002'},
+                    {reportID: '5', displayName: 'Draft 1'},
+                    {reportID: '6', displayName: 'Draft 2'},
                 ];
                 const nonArchivedReports = [
-                    {reportID: '7', displayName: 'Normal 1', sortKey: 'normal 000000000000001'},
-                    {reportID: '8', displayName: 'Normal 2', sortKey: 'normal 000000000000002'},
+                    {reportID: '7', displayName: 'Normal 1'},
+                    {reportID: '8', displayName: 'Normal 2'},
                 ];
                 const archivedReports = [
-                    {reportID: '9', displayName: 'Archived 1', sortKey: 'archived 000000000000001'},
-                    {reportID: '10', displayName: 'Archived 2', sortKey: 'archived 000000000000002'},
+                    {reportID: '9', displayName: 'Archived 1'},
+                    {reportID: '10', displayName: 'Archived 2'},
                 ];
 
                 // When the reports are combined
@@ -4415,13 +4434,13 @@ describe('SidebarUtils', () => {
             it('should filter out reports with undefined reportID', () => {
                 // Given the reports are created
                 const pinnedAndGBRReports = [
-                    {reportID: '1', displayName: 'Pinned 1', sortKey: 'pinned 000000000000001'},
-                    {reportID: undefined, displayName: 'Invalid', sortKey: 'invalid'},
+                    {reportID: '1', displayName: 'Pinned 1'},
+                    {reportID: undefined, displayName: 'Invalid'},
                 ];
-                const errorReports = [{reportID: '2', displayName: 'Error 1', sortKey: 'error 000000000000001'}];
-                const draftReports: Array<{reportID?: string; displayName: string; sortKey: string; lastVisibleActionCreated?: string}> = [];
-                const nonArchivedReports: Array<{reportID?: string; displayName: string; sortKey: string; lastVisibleActionCreated?: string}> = [];
-                const archivedReports: Array<{reportID?: string; displayName: string; sortKey: string; lastVisibleActionCreated?: string}> = [];
+                const errorReports = [{reportID: '2', displayName: 'Error 1'}];
+                const draftReports: Array<{reportID?: string; displayName: string; lastVisibleActionCreated?: string}> = [];
+                const nonArchivedReports: Array<{reportID?: string; displayName: string; lastVisibleActionCreated?: string}> = [];
+                const archivedReports: Array<{reportID?: string; displayName: string; lastVisibleActionCreated?: string}> = [];
 
                 // When the reports are combined
                 const result = _combineReportCategories(pinnedAndGBRReports, errorReports, draftReports, nonArchivedReports, archivedReports);
