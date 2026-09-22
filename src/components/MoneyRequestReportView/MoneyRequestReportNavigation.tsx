@@ -51,7 +51,17 @@ const selectIsExpenseReportSearch = (lastSearchQuery: OnyxEntry<LastSearchParams
 
 const selectQueryHash = (lastSearchQuery: OnyxEntry<LastSearchParams>): number | undefined => lastSearchQuery?.queryJSON?.hash;
 
-const searchLoadingSelector = (snapshot: OnyxEntry<SearchResults>): boolean => !!snapshot?.search?.isLoading;
+type SnapshotPagination = {
+    isLoading: boolean;
+    offset: number;
+};
+
+// The snapshot's own cursor (search.offset) is the only reliable record of which pages have actually
+// landed, so pagination below derives the next page from it the way the Search list does.
+const searchPaginationSelector = (snapshot: OnyxEntry<SearchResults>): SnapshotPagination => ({
+    isLoading: !!snapshot?.search?.isLoading,
+    offset: snapshot?.search?.offset ?? 0,
+});
 
 const isSameReportList = (a: Array<string | undefined>, b: Array<string | undefined> | null): boolean => {
     if (a === b) {
@@ -117,15 +127,24 @@ function MoneyRequestReportNavigationContent({reportID, shouldDisplayNarrowVersi
     // Lightweight subscriptions only: the current search query and its loading flag. These never mount
     // the heavy useSearchSections subscription set, so the fast context path stays cheap.
     const [lastSearchQuery] = useOnyx(ONYXKEYS.REPORT_NAVIGATION_LAST_SEARCH_QUERY);
-    const [isSearchLoading = false] = useOnyx(`${ONYXKEYS.COLLECTION.SNAPSHOT}${lastSearchQuery?.queryJSON?.hash}`, {selector: searchLoadingSelector});
+    const [snapshotPagination] = useOnyx(`${ONYXKEYS.COLLECTION.SNAPSHOT}${lastSearchQuery?.queryJSON?.hash}`, {selector: searchPaginationSelector});
+    const isSearchLoading = snapshotPagination?.isLoading ?? false;
+    const snapshotOffset = snapshotPagination?.offset ?? 0;
 
     // Fast path: use the pre-computed IDs from the search context when they are usable and no page is in
     // flight. Otherwise fall back to the standalone list, which is produced by the child below that mounts
     // the heavy subscriptions only on this slow path. Because this is a value swap inside a single, stable
     // component, toggling isSearchLoading (e.g. the search refresh triggered by submitting a report) no
     // longer unmounts the component and wipes the lastValidReports cache below.
-    const shouldUseContextReports = contextReports.length > 0 && !isSearchLoading;
+    //
+    // The context list is a render-time cache written by the Search list screen, which is frozen behind
+    // the report while the arrows are visible. Once the arrows have requested a page at or beyond its
+    // length, that cache is provably incomplete: keep the standalone child mounted so the snapshot-backed
+    // list survives the isLoading toggle, and switch to it as soon as it is the longer one. Gating on the
+    // persisted offset keeps the cheap fast path for searches that never paginate from the report view.
+    const hasPaginatedPastContext = contextReports.length > 0 && (lastSearchQuery?.offset ?? 0) >= contextReports.length;
     const [standaloneReports, setStandaloneReports] = useState<Array<string | undefined>>([]);
+    const shouldUseContextReports = contextReports.length > 0 && !isSearchLoading && !(hasPaginatedPastContext && standaloneReports.length > contextReports.length);
     const allReports = shouldUseContextReports ? contextReports : standaloneReports;
 
     const liveCurrentIndex = allReports.indexOf(reportID);
@@ -206,8 +225,12 @@ function MoneyRequestReportNavigationContent({reportID, shouldDisplayNarrowVersi
         }
         const threshold = Math.min(effectiveAllReports.length * 0.75, effectiveAllReports.length - 2);
 
-        if (currentIndex + 1 >= threshold && lastSearchQuery?.hasMoreResults) {
-            const newOffset = (lastSearchQuery.offset ?? 0) + CONST.SEARCH.RESULTS_PAGE_SIZE;
+        // Derive the next page from the snapshot's own cursor rather than the previously persisted
+        // offset: the persisted value advances on every request, so with a list that has not grown yet a
+        // run of presses would walk it one page per response past the end of the result set and persist
+        // hasMoreResults: false before the user ever sees those pages.
+        if (currentIndex + 1 >= threshold && lastSearchQuery?.hasMoreResults && !isSearchLoading) {
+            const newOffset = snapshotOffset + CONST.SEARCH.RESULTS_PAGE_SIZE;
             const queryJSON = lastSearchQuery.queryJSON;
             requestAnimationFrame(() => {
                 search({
@@ -216,13 +239,21 @@ function MoneyRequestReportNavigationContent({reportID, shouldDisplayNarrowVersi
                     prevReportsLength: effectiveAllReports.length,
                     shouldCalculateTotals: false,
                     searchKey: lastSearchQuery.searchKey,
-                    isLoading: isSearchLoading,
+                    isLoading: false,
                     shouldUpdateLastSearchParams: true,
+                    previousSearchParams: {
+                        hasMoreResults: lastSearchQuery.hasMoreResults,
+                        previousLengthOfResults: lastSearchQuery.previousLengthOfResults,
+                    },
                 });
             });
         }
 
-        const nextIndex = (currentIndex + 1) % effectiveAllReports.length;
+        const nextIndex = currentIndex + 1;
+        if (nextIndex >= effectiveAllReports.length) {
+            // The next page is not in the list yet; hold position instead of wrapping back to report 1.
+            return;
+        }
         goToReportId(effectiveAllReports.at(nextIndex));
     };
 
@@ -238,8 +269,10 @@ function MoneyRequestReportNavigationContent({reportID, shouldDisplayNarrowVersi
     return (
         <>
             {/* Slow path only: mount the heavy subscriptions and lift the computed list up. Rendered even
-                when the arrows are hidden, since standaloneReports is what decides whether to show them. */}
-            {!shouldUseContextReports && <MoneyRequestReportNavigationStandalone onReportsChange={setStandaloneReports} />}
+                when the arrows are hidden, since standaloneReports is what decides whether to show them.
+                Also kept mounted once the arrows have paginated past the context list, so the page that
+                lands is lifted instead of being discarded when isSearchLoading flips back off. */}
+            {(!shouldUseContextReports || hasPaginatedPastContext) && <MoneyRequestReportNavigationStandalone onReportsChange={setStandaloneReports} />}
             {shouldDisplayNavigationArrows && (
                 <View style={[styles.flexRow, styles.alignItemsCenter, styles.gap2]}>
                     {!shouldDisplayNarrowVersion && <Text style={styles.mutedTextLabel}>{`${currentIndex + 1} of ${allReportsCount}`}</Text>}

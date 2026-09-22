@@ -93,6 +93,7 @@ import type {
 } from '@src/types/onyx';
 import type {PaymentInformation} from '@src/types/onyx/LastPaymentMethod';
 import type {ConnectionName} from '@src/types/onyx/Policy';
+import type LastSearchParams from '@src/types/onyx/ReportNavigation';
 import type {AnyOnyxUpdate, OnyxData} from '@src/types/onyx/Request';
 import type SearchFooterConversion from '@src/types/onyx/SearchFooterConversion';
 import type {SearchResultDataType} from '@src/types/onyx/SearchResults';
@@ -1170,6 +1171,7 @@ function search({
     shouldUpdateLastSearchParams = false,
     skipWaitForWrites = false,
     shouldSaveRecentSearch = false,
+    previousSearchParams,
 }: {
     queryJSON: Readonly<SearchQueryJSON>;
     searchKey: SearchKey | undefined;
@@ -1178,6 +1180,13 @@ function search({
     prevReportsLength?: number;
     isLoading: boolean;
     shouldUpdateLastSearchParams?: boolean;
+    /**
+     * Values to carry through the pre-request last-search-params write. That write is an Onyx.set, so
+     * without this the report-view pagination flags (hasMoreResults, previousLengthOfResults) are blanked
+     * for the whole request and stay blanked forever if it fails, permanently disabling the navigation
+     * arrows with no retry path.
+     */
+    previousSearchParams?: Pick<LastSearchParams, 'hasMoreResults' | 'previousLengthOfResults'>;
     /**
      * Tells the backend this query was submitted by the user, so it may be saved to the recent searches NVP.
      * Only the Search page call site should pass true. Programmatic searches (home sections, post-action
@@ -1223,6 +1232,7 @@ function search({
                     shouldUpdateLastSearchParams,
                     skipWaitForWrites,
                     shouldSaveRecentSearch: inFlightRequest.pendingShouldSaveRecentSearch,
+                    previousSearchParams,
                 });
         }
         return;
@@ -1250,6 +1260,7 @@ function search({
             offset,
             allowPostSearchRecount: false,
             searchKey,
+            ...previousSearchParams,
         });
     }
 
