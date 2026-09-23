@@ -324,5 +324,40 @@ describe('OnboardingFlow', () => {
 
             expect(mockedResetRoot).toHaveBeenCalledTimes(1);
         });
+
+        it('should re-focus the onboarding navigator when it is mounted but buried under a later route', () => {
+            // Given the onboarding navigator is present in the root state but buried under a later route
+            const rootState = buildRootState([
+                {key: 'home', name: SCREENS.HOME},
+                {key: 'onboarding', name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR},
+                {key: 'home-2', name: SCREENS.HOME},
+            ]);
+            mockedGetRootState.mockReturnValue(rootState);
+
+            // When startOnboardingFlow runs again
+            startOnboardingFlow(params);
+
+            // Then the existing navigator must be moved back on top so the modal is visible again
+            expect(mockedResetRoot).toHaveBeenCalledTimes(1);
+            const resetState = mockedResetRoot.mock.calls.at(0)?.at(0);
+            expect(resetState?.routes?.at(-1)?.name).toBe(NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR);
+            expect(resetState?.index).toBe((resetState?.routes?.length ?? 0) - 1);
+        });
+
+        it('should not reset when the onboarding navigator is mounted and already focused', () => {
+            // Given the onboarding navigator is the focused (last) root route with another route beneath it
+            mockedGetRootState.mockReturnValue(
+                buildRootState([
+                    {key: 'home', name: SCREENS.HOME},
+                    {key: 'onboarding', name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR},
+                ]),
+            );
+
+            // When startOnboardingFlow runs again
+            startOnboardingFlow(params);
+
+            // Then no reset must fire, a redundant reset would re-trigger guard evaluations (APP-7FR)
+            expect(mockedResetRoot).not.toHaveBeenCalled();
+        });
     });
 });

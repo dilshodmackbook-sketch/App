@@ -494,8 +494,8 @@ describe('OnboardingGuard', () => {
             type: 'stack',
         };
 
-        it('should ALLOW when user is already on onboarding to prevent redirect loop', async () => {
-            // Given a HybridApp user who needs onboarding (all shouldSkipOnboarding conditions are false)
+        it('should ALLOW navigation that stays on onboarding while it is focused', async () => {
+            // Given a user who needs onboarding (all shouldSkipOnboarding conditions are false)
             await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
                 hasCompletedGuidedSetupFlow: false,
             });
@@ -504,12 +504,117 @@ describe('OnboardingGuard', () => {
             });
             await waitForBatchedUpdates();
 
-            // When the guard evaluates any action while the user is already on the OnboardingModalNavigator
-            const result = OnboardingGuard.evaluate(stateWithOnboardingNavigator, mockAction, authenticatedContext);
+            // When a NAVIGATE targeting the OnboardingModalNavigator itself arrives while onboarding is focused
+            const withinOnboardingAction: NavigationAction = {
+                type: CONST.NAVIGATION.ACTION_TYPE.NAVIGATE,
+                payload: {name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR},
+            };
+            const result = OnboardingGuard.evaluate(stateWithOnboardingNavigator, withinOnboardingAction, authenticatedContext);
 
-            // Then navigation should be ALLOWED because the user is already on onboarding;
-            // redirecting again would produce a redundant state reset that causes an infinite loop
+            // Then navigation should be ALLOWED because the action does not leave the onboarding flow
             expect(result.type).toBe('ALLOW');
+        });
+
+        it('should BLOCK a NAVIGATE/PUSH away from focused onboarding before it is completed', async () => {
+            // Given a user who needs onboarding and is currently on the focused OnboardingModalNavigator
+            await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
+                hasCompletedGuidedSetupFlow: false,
+            });
+            await Onyx.merge(ONYXKEYS.ACCOUNT, {
+                isFromPublicDomain: true,
+            });
+            await waitForBatchedUpdates();
+
+            // When root-level NAVIGATE/PUSH/POP_TO/REPLACE actions targeting a non-onboarding route arrive
+            const navigateAwayResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, mockAction, authenticatedContext);
+            const pushAwayAction: NavigationAction = {
+                type: CONST.NAVIGATION.ACTION_TYPE.PUSH,
+                payload: {name: SCREENS.HOME},
+            };
+            const pushAwayResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, pushAwayAction, authenticatedContext);
+            const popToAwayAction: NavigationAction = {
+                type: CONST.NAVIGATION.ACTION_TYPE.POP_TO,
+                payload: {name: NAVIGATORS.TAB_NAVIGATOR},
+            };
+            const popToAwayResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, popToAwayAction, authenticatedContext);
+            const replaceAwayAction: NavigationAction = {
+                type: CONST.NAVIGATION.ACTION_TYPE.REPLACE,
+                payload: {name: NAVIGATORS.TAB_NAVIGATOR},
+            };
+            const replaceAwayResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, replaceAwayAction, authenticatedContext);
+
+            // Then all of them must be BLOCKED so the modal can be neither buried nor popped off
+            expect(navigateAwayResult.type).toBe('BLOCK');
+            expect(pushAwayResult.type).toBe('BLOCK');
+            expect(popToAwayResult.type).toBe('BLOCK');
+            expect(replaceAwayResult.type).toBe('BLOCK');
+        });
+
+        it('should ALLOW the completion exit navigation once hasCompletedGuidedSetupFlow flips true', async () => {
+            // Given a user on the focused onboarding modal who has not yet completed onboarding
+            await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
+                hasCompletedGuidedSetupFlow: false,
+            });
+            await Onyx.merge(ONYXKEYS.ACCOUNT, {
+                isFromPublicDomain: true,
+            });
+            await waitForBatchedUpdates();
+
+            // When the completion NAVIGATE arrives before the optimistic hasCompletedGuidedSetupFlow write lands
+            const beforeFlip = OnboardingGuard.evaluate(stateWithOnboardingNavigator, mockAction, authenticatedContext);
+
+            // Then it is blocked without mutating state, so nothing is lost
+            expect(beforeFlip.type).toBe('BLOCK');
+
+            // When the optimistic write lands and the same action re-arrives
+            await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
+                hasCompletedGuidedSetupFlow: true,
+            });
+            await waitForBatchedUpdates();
+            const afterFlip = OnboardingGuard.evaluate(stateWithOnboardingNavigator, mockAction, authenticatedContext);
+
+            // Then the exit is allowed, so a lagging write can only delay the exit by one action, never trap the user
+            expect(afterFlip.type).toBe('ALLOW');
+        });
+
+        it('should ALLOW modal dismissal action types while onboarding is focused and incomplete', async () => {
+            // Given a user on the focused onboarding modal who has not completed onboarding
+            await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
+                hasCompletedGuidedSetupFlow: false,
+            });
+            await Onyx.merge(ONYXKEYS.ACCOUNT, {
+                isFromPublicDomain: true,
+            });
+            await waitForBatchedUpdates();
+
+            // When the native completion exit dispatches DISMISS_MODAL or a POP/GO_BACK arrives
+            const dismissResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, {type: CONST.NAVIGATION.ACTION_TYPE.DISMISS_MODAL}, authenticatedContext);
+            const popResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, {type: CONST.NAVIGATION.ACTION_TYPE.POP, payload: {count: 1}}, authenticatedContext);
+            const goBackResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, {type: CONST.NAVIGATION.ACTION_TYPE.GO_BACK}, authenticatedContext);
+
+            // Then none of them are in the leave-block list, so the exit path is never blocked by the guard
+            expect(dismissResult.type).toBe('ALLOW');
+            expect(popResult.type).toBe('ALLOW');
+            expect(goBackResult.type).toBe('ALLOW');
+        });
+
+        it('should ALLOW non-navigate actions while onboarding is focused', async () => {
+            // Given a user who needs onboarding and is currently on the focused OnboardingModalNavigator
+            await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
+                hasCompletedGuidedSetupFlow: false,
+            });
+            await Onyx.merge(ONYXKEYS.ACCOUNT, {
+                isFromPublicDomain: true,
+            });
+            await waitForBatchedUpdates();
+
+            // When action types other than NAVIGATE/PUSH arrive (back navigation, param updates)
+            const goBackResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, {type: 'GO_BACK'}, authenticatedContext);
+            const setParamsResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, {type: 'SET_PARAMS', payload: {params: {}}}, authenticatedContext);
+
+            // Then they must remain ALLOWED so in-flow interactions (and the native modal exit) keep working
+            expect(goBackResult.type).toBe('ALLOW');
+            expect(setParamsResult.type).toBe('ALLOW');
         });
 
         it('should prove the guard reaches a stable state (no infinite loop)', async () => {
@@ -526,13 +631,12 @@ describe('OnboardingGuard', () => {
             const firstResult = OnboardingGuard.evaluate(mockState, mockAction, authenticatedContext);
             expect(firstResult.type).toBe('REDIRECT');
 
-            // And then subsequent evaluations on the post-redirect state (OnboardingModalNavigator mounted)
-            // reach a stable ALLOW state, breaking any potential loop
+            // And then evaluations on the post-redirect state are BLOCKED without producing a reset, so no loop
             const secondResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, mockAction, authenticatedContext);
-            expect(secondResult.type).toBe('ALLOW');
+            expect(secondResult.type).toBe('BLOCK');
 
             const thirdResult = OnboardingGuard.evaluate(stateWithOnboardingNavigator, mockAction, authenticatedContext);
-            expect(thirdResult.type).toBe('ALLOW');
+            expect(thirdResult.type).toBe('BLOCK');
         });
 
         it('should still redirect when user is NOT on onboarding and needs it', async () => {
