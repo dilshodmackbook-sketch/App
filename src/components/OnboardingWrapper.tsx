@@ -1,5 +1,7 @@
 import useThemeStyles from '@hooks/useThemeStyles';
 
+import {useOnboardingFocusTrapContainers} from '@libs/Navigation/AppNavigator/Navigators/OnboardingModalNavigatorContentWrapper/OnboardingHeaderContext';
+
 import React from 'react';
 import {View} from 'react-native';
 
@@ -11,10 +13,16 @@ type OnboardingWrapperProps = {
 
 function OnboardingWrapper({children}: OnboardingWrapperProps) {
     const styles = useThemeStyles();
+    const {screenWrapperRef, focusTrapSettings} = useOnboardingFocusTrapContainers();
 
     return (
-        <FocusTrapForScreens>
-            <View style={styles.h100}>{children}</View>
+        <FocusTrapForScreens focusTrapSettings={focusTrapSettings}>
+            <View
+                ref={screenWrapperRef}
+                style={styles.h100}
+            >
+                {children}
+            </View>
         </FocusTrapForScreens>
     );
 }
