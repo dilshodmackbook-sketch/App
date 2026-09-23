@@ -91,7 +91,24 @@ Onyx.connectWithoutView({
 function startOnboardingFlow(startOnboardingFlowParams: GetOnboardingInitialPathParamsType) {
     const rootState = navigationRef.getRootState();
 
-    if (rootState.routes.some((route) => route.name === NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR)) {
+    const onboardingRouteIndex = rootState.routes.findIndex((route) => route.name === NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR);
+    if (onboardingRouteIndex !== -1) {
+        if (onboardingRouteIndex === rootState.index) {
+            return;
+        }
+
+        // The navigator is mounted but buried under a later route, so re-focus it instead of giving up for the session.
+        const onboardingRoute = rootState.routes.at(onboardingRouteIndex);
+        if (!onboardingRoute) {
+            return;
+        }
+        // The routes are already hydrated and only their order changes, so no stale reset is needed.
+        const refocusedRoutes = [...rootState.routes.filter((route) => route.name !== NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR), onboardingRoute];
+        navigationRef.resetRoot({
+            ...rootState,
+            routes: refocusedRoutes,
+            index: refocusedRoutes.length - 1,
+        });
         return;
     }
 
