@@ -194,6 +194,29 @@ function isNavigatingToOnboardingFlowWithReplaceAction(action: NavigationAction)
     return action.type === CONST.NAVIGATION.ACTION_TYPE.REPLACE && (action.payload as {name?: string} | undefined)?.name === NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR;
 }
 
+function hasNamePayload(value: unknown): value is {name?: unknown} {
+    return typeof value === 'object' && value !== null;
+}
+
+/** Root-level target route name of the action, if any */
+function getRootActionTargetName(action: NavigationAction): string | undefined {
+    if (!hasNamePayload(action.payload) || typeof action.payload.name !== 'string') {
+        return undefined;
+    }
+    return action.payload.name;
+}
+
+/** Whether a root-level action would take the user off the focused onboarding flow */
+function isActionLeavingFocusedOnboarding(action: NavigationAction): boolean {
+    const isLeavingActionType =
+        action.type === CONST.NAVIGATION.ACTION_TYPE.NAVIGATE ||
+        action.type === CONST.NAVIGATION.ACTION_TYPE.PUSH ||
+        action.type === CONST.NAVIGATION.ACTION_TYPE.POP_TO ||
+        action.type === CONST.NAVIGATION.ACTION_TYPE.REPLACE;
+
+    return isLeavingActionType && getRootActionTargetName(action) !== NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR;
+}
+
 /**
  * OnboardingGuard handles ONLY the core NewDot onboarding flow
  */
@@ -255,11 +278,12 @@ const OnboardingGuard: NavigationGuard = {
             return {type: 'ALLOW'};
         }
 
-        // If the OnboardingModalNavigator is the currently focused route, the user is already
-        // on the onboarding flow. Redirecting again would produce a redundant state reset that
-        // triggers further actions, creating an infinite navigation loop (APP-7FR).
+        // The user is already on onboarding, so only admit actions that stay on it - NAVIGATE/PUSH would bury the modal, POP_TO/REPLACE would remove it from the stack.
         const isOnboardingFocused = state.routes[state.index]?.name === NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR;
         if (isOnboardingFocused) {
+            if (isActionLeavingFocusedOnboarding(action)) {
+                return {type: 'BLOCK', reason: 'Cannot navigate away from onboarding before it is completed'};
+            }
             return {type: 'ALLOW'};
         }
 
