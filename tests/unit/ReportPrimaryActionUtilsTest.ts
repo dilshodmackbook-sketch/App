@@ -1230,7 +1230,10 @@ describe('getPrimaryAction', () => {
         ).not.toBe(CONST.REPORT.PRIMARY_ACTIONS.PAY);
     });
 
-    it('should not return PAY for expense report with only non-reimbursable transactions when total is 0', async () => {
+    // A finished report made up only of non-reimbursable expenses with a $0 total can still be closed out via
+    // Mark as paid, matching OldDot and the "only option is mark as paid" decision in #87552 (which superseded the
+    // Pay button being hidden in #87117). See https://github.com/Expensify/App/issues/102215.
+    it('should return PAY for expense report with only non-reimbursable transactions when total is 0', async () => {
         const report = createMock<Report>({
             reportID: REPORT_ID,
             type: CONST.REPORT.TYPE.EXPENSE,
@@ -1262,7 +1265,7 @@ describe('getPrimaryAction', () => {
                 policy,
                 isChatReportArchived: false,
             }),
-        ).not.toBe(CONST.REPORT.PRIMARY_ACTIONS.PAY);
+        ).toBe(CONST.REPORT.PRIMARY_ACTIONS.PAY);
     });
 
     it('should return EXPORT TO ACCOUNTING for finished reports', async () => {

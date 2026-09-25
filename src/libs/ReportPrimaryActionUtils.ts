@@ -37,6 +37,7 @@ import {
     canAddTransaction as canAddTransactionUtil,
     canHoldUnholdReportAction,
     getMoneyRequestSpendBreakdown,
+    hasSettledZeroReimbursableSpend,
     getParentReport,
     hasExportError as hasExportErrorUtil,
     hasOnlyHeldExpenses,
@@ -264,7 +265,9 @@ function isPrimaryPayAction({
         isExpenseReport &&
         arePaymentsEnabled &&
         isReportFinished &&
-        (reimbursableSpend !== 0 || (nonReimbursableSpend !== 0 && hasOnlyNonReimbursableTransactions(report?.reportID, reportTransactions)))
+        (reimbursableSpend !== 0 ||
+            hasSettledZeroReimbursableSpend(report?.reportID, report, reportTransactions) ||
+            (nonReimbursableSpend !== 0 && hasOnlyNonReimbursableTransactions(report?.reportID, reportTransactions)))
     ) {
         return isSecondaryAction ?? !didExportFail;
     }

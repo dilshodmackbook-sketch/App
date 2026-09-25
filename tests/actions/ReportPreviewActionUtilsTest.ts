@@ -1021,7 +1021,10 @@ describe('getReportPreviewAction', () => {
         ).toBe(CONST.REPORT.REPORT_PREVIEW_ACTIONS.PAY);
     });
 
-    it('canPay should return VIEW for expense report with only non-reimbursable expenses when total is 0', async () => {
+    // A finished report made up only of non-reimbursable expenses with a $0 total can still be closed out via
+    // Mark as paid, matching OldDot and the "only option is mark as paid" decision in #87552 (which superseded the
+    // Pay button being hidden in #87117). See https://github.com/Expensify/App/issues/102215.
+    it('canPay should return PAY for expense report with only non-reimbursable expenses when total is 0', async () => {
         const report = {
             ...createRandomReport(REPORT_ID, undefined),
             type: CONST.REPORT.TYPE.EXPENSE,
@@ -1044,6 +1047,7 @@ describe('getReportPreviewAction', () => {
         await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${REPORT_ID}`, report);
         const transaction = createMock<Transaction>({
             reportID: `${REPORT_ID}`,
+            reimbursable: false,
         });
 
         const {result: isReportArchived} = renderHook(() => useReportIsArchived(report?.parentReportID));
@@ -1061,7 +1065,7 @@ describe('getReportPreviewAction', () => {
                 ownerLogin: CURRENT_USER_EMAIL,
                 rules: undefined,
             }),
-        ).toBe(CONST.REPORT.REPORT_PREVIEW_ACTIONS.VIEW);
+        ).toBe(CONST.REPORT.REPORT_PREVIEW_ACTIONS.PAY);
     });
 
     it('canPay should return true for submitted invoice', async () => {

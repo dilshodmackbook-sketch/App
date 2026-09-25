@@ -3688,7 +3688,10 @@ describe('actions/IOU/ReportWorkflow', () => {
             expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, onlyNonReimbursableTransactions, true)).toBeTruthy();
         });
 
-        it('should return false for report with only non-reimbursable expenses when amount is 0 (onlyShowPayElsewhere=true)', async () => {
+        // A finished report made up only of non-reimbursable expenses with a $0 total can still be marked as paid, to
+        // match OldDot and the "only option is mark as paid" decision in #87552 (which superseded the Pay button being
+        // hidden in #87117). A real settlement is still never offered. See https://github.com/Expensify/App/issues/102215.
+        it('offers Mark as paid for report with only non-reimbursable expenses when amount is 0 (onlyShowPayElsewhere=true)', async () => {
             const policyChat = createRandomReport(1, CONST.REPORT.CHAT_TYPE.POLICY_EXPENSE_CHAT);
             const reportID = '998';
 
@@ -3728,7 +3731,140 @@ describe('actions/IOU/ReportWorkflow', () => {
             await Onyx.merge(`${ONYXKEYS.COLLECTION.POLICY}${fakePolicy.id}`, fakePolicy);
 
             expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, zeroAmountNonReimbursableTransactions, false)).toBeFalsy();
-            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, zeroAmountNonReimbursableTransactions, true)).toBeFalsy();
+            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, zeroAmountNonReimbursableTransactions, true)).toBeTruthy();
+        });
+
+        it('offers Mark as paid on an approved report whose reimbursable expenses cancel to $0 (onlyShowPayElsewhere=true)', async () => {
+            // Given an approved expense report whose reimbursable spend nets to exactly $0 (a +$50 and a -$50 reimbursable expense)
+            const policyChat = createRandomReport(1, CONST.REPORT.CHAT_TYPE.POLICY_EXPENSE_CHAT);
+            const reportID = '997';
+
+            const fakePolicy: Policy = {
+                ...createRandomPolicy(1),
+                id: 'AA',
+                type: CONST.POLICY.TYPE.TEAM,
+                approvalMode: CONST.POLICY.APPROVAL_MODE.OPTIONAL,
+                reimbursementChoice: CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_YES,
+                role: CONST.POLICY.ROLE.ADMIN,
+            };
+
+            const fakeReport: Report = {
+                ...createRandomReport(Number(reportID), undefined),
+                reportID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                policyID: 'AA',
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+                ownerAccountID: CARLOS_ACCOUNT_ID,
+                managerID: RORY_ACCOUNT_ID,
+                isWaitingOnBankAccount: false,
+                total: 0,
+                nonReimbursableTotal: 0,
+            };
+
+            const cancellingReimbursableTransactions: Transaction[] = [
+                {...createRandomTransaction(1), reportID, amount: 5000, currency: 'USD', reimbursable: true},
+                {...createRandomTransaction(2), reportID, amount: -5000, currency: 'USD', reimbursable: true},
+            ];
+
+            await Onyx.merge(`${ONYXKEYS.COLLECTION.POLICY}${fakePolicy.id}`, fakePolicy);
+
+            // Then a real settlement is never offered (no money moves) but Mark as paid (pay elsewhere) is, so the approver can close it out
+            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, cancellingReimbursableTransactions, false)).toBeFalsy();
+            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, cancellingReimbursableTransactions, true)).toBeTruthy();
+        });
+
+        it('does not offer Mark as paid when a reimbursable amount has not arrived yet (a scan still running alongside the cancelling pair)', async () => {
+            // Given the same $0-reimbursable report but with a third reimbursable expense whose receipt is still being scanned, so its real amount is unknown
+            const policyChat = createRandomReport(1, CONST.REPORT.CHAT_TYPE.POLICY_EXPENSE_CHAT);
+            const reportID = '996';
+
+            const fakePolicy: Policy = {
+                ...createRandomPolicy(1),
+                id: 'AA',
+                type: CONST.POLICY.TYPE.TEAM,
+                approvalMode: CONST.POLICY.APPROVAL_MODE.OPTIONAL,
+                reimbursementChoice: CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_YES,
+                role: CONST.POLICY.ROLE.ADMIN,
+            };
+
+            const fakeReport: Report = {
+                ...createRandomReport(Number(reportID), undefined),
+                reportID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                policyID: 'AA',
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+                ownerAccountID: CARLOS_ACCOUNT_ID,
+                managerID: RORY_ACCOUNT_ID,
+                isWaitingOnBankAccount: false,
+                total: 0,
+                nonReimbursableTotal: 0,
+            };
+
+            const withUnsettledScan: Transaction[] = [
+                {...createRandomTransaction(1), reportID, amount: 5000, currency: 'USD', reimbursable: true},
+                {...createRandomTransaction(2), reportID, amount: -5000, currency: 'USD', reimbursable: true},
+                {
+                    ...createRandomTransaction(3),
+                    reportID,
+                    amount: 0,
+                    currency: 'USD',
+                    reimbursable: true,
+                    merchant: '',
+                    modifiedMerchant: '',
+                    modifiedAmount: '',
+                    iouRequestType: CONST.IOU.REQUEST_TYPE.SCAN,
+                    receipt: {state: CONST.IOU.RECEIPT_STATE.SCANNING},
+                },
+            ];
+
+            await Onyx.merge(`${ONYXKEYS.COLLECTION.POLICY}${fakePolicy.id}`, fakePolicy);
+
+            // Then neither a real settlement nor Mark as paid is offered, because the true reimbursable spend is still unknown
+            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, withUnsettledScan, false)).toBeFalsy();
+            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, withUnsettledScan, true)).toBeFalsy();
+        });
+
+        it('does not offer Mark as paid when a reimbursable expense is owed but a non-reimbursable credit nets the report to $0', async () => {
+            // Given an approved report with a +$50 reimbursable expense offset by a -$50 non-reimbursable credit, so the
+            // report total is $0 (getMoneyRequestSpendBreakdown short-circuits reimbursableSpend to 0) but $50 is still owed
+            const policyChat = createRandomReport(1, CONST.REPORT.CHAT_TYPE.POLICY_EXPENSE_CHAT);
+            const reportID = '995';
+
+            const fakePolicy: Policy = {
+                ...createRandomPolicy(1),
+                id: 'AA',
+                type: CONST.POLICY.TYPE.TEAM,
+                approvalMode: CONST.POLICY.APPROVAL_MODE.OPTIONAL,
+                reimbursementChoice: CONST.POLICY.REIMBURSEMENT_CHOICES.REIMBURSEMENT_YES,
+                role: CONST.POLICY.ROLE.ADMIN,
+            };
+
+            const fakeReport: Report = {
+                ...createRandomReport(Number(reportID), undefined),
+                reportID,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                policyID: 'AA',
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+                ownerAccountID: CARLOS_ACCOUNT_ID,
+                managerID: RORY_ACCOUNT_ID,
+                isWaitingOnBankAccount: false,
+                total: 0,
+                nonReimbursableTotal: 0,
+            };
+
+            const reimbursableOwedWithCredit: Transaction[] = [
+                {...createRandomTransaction(1), reportID, amount: 5000, currency: 'USD', reimbursable: true},
+                {...createRandomTransaction(2), reportID, amount: -5000, currency: 'USD', reimbursable: false},
+            ];
+
+            await Onyx.merge(`${ONYXKEYS.COLLECTION.POLICY}${fakePolicy.id}`, fakePolicy);
+
+            // Then neither a real settlement nor Mark as paid is offered, because $50 is genuinely owed for reimbursement
+            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, reimbursableOwedWithCredit, false)).toBeFalsy();
+            expect(canIOUBePaid(fakeReport, policyChat, fakePolicy, {}, RORY_EMAIL, RORY_ACCOUNT_ID, reimbursableOwedWithCredit, true)).toBeFalsy();
         });
 
         it('allows non-reimburser admin to pay in manual reimbursement mode', async () => {

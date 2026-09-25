@@ -285,6 +285,7 @@ import {
     isPayAtEndExpense,
     isPending,
     isPerDiemRequest,
+    isExpenseValueUnsettled,
     isReceiptBeingScanned,
     isScanning,
     isScanRequest as isScanRequestTransactionUtils,
@@ -2810,15 +2811,47 @@ function shouldReportAlignToTop(report: OnyxEntry<Report>, parentReportAction: O
 }
 
 /**
+ * Resolves the transactions for a report, preferring an explicitly passed list over reading them from Onyx.
+ */
+function resolveReportTransactions(iouReportID: string | undefined, transactionsParam?: Array<OnyxEntry<Transaction>>): Array<OnyxEntry<Transaction>> {
+    return transactionsParam ?? getReportTransactions(iouReportID);
+}
+
+/**
  * Checks if a report contains only Non-Reimbursable transactions
  */
 function hasOnlyNonReimbursableTransactions(iouReportID: string | undefined, transactionsParam?: Transaction[]): boolean {
-    const transactions = transactionsParam ?? getReportTransactions(iouReportID);
+    const transactions = resolveReportTransactions(iouReportID, transactionsParam);
     if (!transactions || transactions.length === 0) {
         return false;
     }
 
     return transactions.every((transaction) => !getReimbursable(transaction));
+}
+
+/**
+ * Whether a finished report has nothing left to reimburse but still needs to be closed out via Mark as paid, for
+ * example a +$50 and a -$50 reimbursable expense that cancel, or a report made up only of non-reimbursable expenses.
+ * The reimbursable spend is summed from the transactions rather than read from getMoneyRequestSpendBreakdown, which
+ * short-circuits to 0 whenever the report total is 0: a +$50 reimbursable expense offset by a -$50 non-reimbursable
+ * credit nets the report to $0 but still owes $50, so it must not be offered Mark as paid. Every expense must have a
+ * settled value, so a report with a running or failed scan (whose real amount has not arrived) stays without Pay.
+ */
+function hasSettledZeroReimbursableSpend(iouReportID: string | undefined, report: OnyxInputOrEntry<Report>, transactionsParam?: Array<OnyxEntry<Transaction>>): boolean {
+    // Fail closed when the report's totals have not loaded yet or are pending, so an unloaded report in an LHN or
+    // Search snapshot is not misread as a settled $0 report and does not let PAY outrank exporting.
+    if (!report || (report.reimbursableTotal === undefined && report.total === undefined) || isReportTotalPending(report)) {
+        return false;
+    }
+    const expenses = resolveReportTransactions(iouReportID, transactionsParam).filter((transaction) => !isTransactionPendingDelete(transaction));
+    if (expenses.length === 0) {
+        return false;
+    }
+    const reimbursableSpend = expenses.reduce((total, transaction) => (getReimbursable(transaction) ? total + getTransactionAmount(transaction, true) : total), 0);
+    if (reimbursableSpend !== 0) {
+        return false;
+    }
+    return !expenses.some((transaction) => isExpenseValueUnsettled(transaction, report ?? undefined));
 }
 
 /**
@@ -14691,6 +14724,7 @@ export {
     hasExpensifyGuidesEmails,
     hasExportError,
     hasOnlyNonReimbursableTransactions,
+    hasSettledZeroReimbursableSpend,
     getReportLastMessage,
     getReportLastVisibleActionCreated,
     getMostRecentlyVisitedReport,

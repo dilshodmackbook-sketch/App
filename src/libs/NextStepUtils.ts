@@ -18,6 +18,7 @@ import {
     getDisplayNameForParticipant,
     getMoneyRequestSpendBreakdown,
     getNextApproverAccountID,
+    hasSettledZeroReimbursableSpend,
     isExpenseReport,
     isInvoiceReport,
     isOpenExpenseReport,
@@ -336,6 +337,7 @@ function getReportNextStep({
     const {reimbursableSpend} = getMoneyRequestSpendBreakdown(moneyRequestReport);
     const shouldShowNoFurtherAction =
         reimbursableSpend === 0 &&
+        !hasSettledZeroReimbursableSpend(moneyRequestReport?.reportID, moneyRequestReport, transactions) &&
         (moneyRequestReport?.statusNum === CONST.REPORT.STATUS_NUM.APPROVED ||
             (moneyRequestReport?.statusNum === CONST.REPORT.STATUS_NUM.SUBMITTED && policy?.approvalMode === CONST.POLICY.APPROVAL_MODE.OPTIONAL));
 

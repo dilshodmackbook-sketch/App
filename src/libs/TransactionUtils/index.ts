@@ -3680,6 +3680,19 @@ function hasSubmissionBlockingViolations(
     return hasSubmissionBlockingViolationInList(violations);
 }
 
+// Whether an expense has no reliable value yet: a scan in progress, a pending Expensify Card charge, or a failed scan with missing fields.
+function isExpenseValueUnsettled(
+    transaction: OnyxEntry<Transaction>,
+    report: OnyxEntry<Report>,
+    isTransactionScanning: (transactionToCheck: OnyxEntry<Transaction>) => boolean = isScanning,
+): boolean {
+    return (
+        isTransactionScanning(transaction) ||
+        (isExpensifyCardTransaction(transaction) && isPending(transaction)) ||
+        hasSmartScanFailedWithMissingFields(transaction ? [transaction] : [], report)
+    );
+}
+
 function isTransactionSubmittable(
     transaction: Transaction,
     report: OnyxEntry<Report>,
@@ -3690,7 +3703,7 @@ function isTransactionSubmittable(
     policy: OnyxEntry<Policy>,
     isTransactionScanning: (transactionToCheck: OnyxEntry<Transaction>) => boolean = isScanning,
 ): boolean {
-    if (isTransactionScanning(transaction) || (isExpensifyCardTransaction(transaction) && isPending(transaction)) || hasSmartScanFailedWithMissingFields([transaction], report)) {
+    if (isExpenseValueUnsettled(transaction, report, isTransactionScanning)) {
         return false;
     }
 
@@ -3960,6 +3973,7 @@ export {
     isScanningTransaction,
     isScanning,
     isTransactionSubmittable,
+    isExpenseValueUnsettled,
     isCategoryBeingAnalyzed,
     getOriginalTransactionWithSplitInfo,
     shouldRedirectDeleteToSplitExpenseEdit,
