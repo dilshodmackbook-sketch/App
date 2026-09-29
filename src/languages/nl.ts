@@ -10941,8 +10941,7 @@ er bestedingsregels toe om de kasstroom van het bedrijf te beschermen.`,
         paymentHistory: {title: 'Bekijk betalingsgeschiedenis', subtitle: 'Je volledige maandelijkse betalingsgeschiedenis die op deze rekening in rekening is gebracht.'},
         subscriptionSettings: {
             title: 'Abonnementsinstellingen',
-            summary: (subscriptionType: string, subscriptionSize: string, expensifyCode: string, autoRenew: string, autoIncrease: string) =>
-                `Abonnementstype: ${subscriptionType}, Abonnementsomvang: ${subscriptionSize}${expensifyCode ? `, Expensify-code: ${expensifyCode}` : ''}, Automatisch verlengen: ${autoRenew}, Automatisch jaarlijkse seats verhogen: ${autoIncrease}`,
+            sizeWithFrequency: (count: number, isAnnual: boolean) => `${count} ${count === 1 ? 'lid' : 'leden'} (${isAnnual ? 'Jaarlijks' : 'Maandelijks'})`,
             none: 'geen',
             on: 'aan',
             off: 'uit',

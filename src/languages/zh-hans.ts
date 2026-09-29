@@ -10531,8 +10531,7 @@ ${reportName}`,
         paymentHistory: {title: '查看付款记录', subtitle: '此账户每月全部付款记录。'},
         subscriptionSettings: {
             title: '订阅设置',
-            summary: (subscriptionType: string, subscriptionSize: string, expensifyCode: string, autoRenew: string, autoIncrease: string) =>
-                `订阅类型：${subscriptionType}，订阅规模：${subscriptionSize}${expensifyCode ? `，Expensify代码：${expensifyCode}` : ''}，自动续订：${autoRenew}，年度席位自动增加：${autoIncrease}`,
+            sizeWithFrequency: (count: number, isAnnual: boolean) => `${count} 位成员 (${isAnnual ? '年度' : '每月'})`,
             none: '无',
             on: '开在',
             off: '关关闭',

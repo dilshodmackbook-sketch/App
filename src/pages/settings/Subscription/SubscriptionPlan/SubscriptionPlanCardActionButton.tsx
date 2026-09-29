@@ -136,10 +136,13 @@ function SubscriptionPlanCardActionButton({subscriptionPlan, isFromComparisonMod
     }
 
     const autoIncrease = privateSubscription?.addNewUsersAutomatically ? translate('subscription.subscriptionSettings.on') : translate('subscription.subscriptionSettings.off');
-    const subscriptionType = isAnnual ? translate('subscription.subscriptionSettings.annual') : translate('subscription.details.payPerUse');
-    const subscriptionSize = `${privateSubscription?.userCount ?? translate('subscription.subscriptionSettings.none')}`;
     const autoRenew = privateSubscription?.autoRenew ? translate('subscription.subscriptionSettings.on') : translate('subscription.subscriptionSettings.off');
     const expensifyCode = isSecretPromoCode ? '' : (privatePromoCode ?? '');
+    const planValue = privateSubscription?.userCount
+        ? translate('subscription.subscriptionSettings.sizeWithFrequency', privateSubscription.userCount, isAnnual)
+        : isAnnual
+          ? translate('subscription.subscriptionSettings.annual')
+          : translate('subscription.details.payPerUse');
 
     return (
         <View>
@@ -147,9 +150,32 @@ function SubscriptionPlanCardActionButton({subscriptionPlan, isFromComparisonMod
                 description={translate('subscription.subscriptionSettings.title')}
                 style={style}
                 interactive={false}
-                numberOfLinesTitle={3}
-                title={translate('subscription.subscriptionSettings.summary', subscriptionType, subscriptionSize, expensifyCode, autoRenew, autoIncrease)}
+                title={planValue}
             />
+            {isAnnual && (
+                <>
+                    <MenuItemWithTopDescription
+                        description={translate('subscription.subscriptionSettings.autoRenew')}
+                        style={style}
+                        interactive={false}
+                        title={autoRenew}
+                    />
+                    <MenuItemWithTopDescription
+                        description={translate('subscription.subscriptionSettings.autoIncrease')}
+                        style={style}
+                        interactive={false}
+                        title={autoIncrease}
+                    />
+                </>
+            )}
+            {!!expensifyCode && (
+                <MenuItemWithTopDescription
+                    description={translate('subscription.expensifyCode.title')}
+                    style={style}
+                    interactive={false}
+                    title={expensifyCode}
+                />
+            )}
             <View style={[style, styles.mt2]}>
                 <Button
                     onPress={() => Navigation.navigate(ROUTES.SETTINGS_SUBSCRIPTION_SETTINGS_DETAILS)}

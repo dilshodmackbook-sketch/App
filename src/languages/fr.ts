@@ -11053,8 +11053,7 @@ Ajoutez davantage de règles de dépenses pour protéger la trésorerie de l’e
         paymentHistory: {title: 'Afficher l’historique des paiements', subtitle: 'Votre historique complet des paiements mensuels facturés sur ce compte.'},
         subscriptionSettings: {
             title: 'Paramètres d’abonnement',
-            summary: (subscriptionType: string, subscriptionSize: string, expensifyCode: string, autoRenew: string, autoIncrease: string) =>
-                `Type d’abonnement : ${subscriptionType}, Taille de l’abonnement : ${subscriptionSize}${expensifyCode ? `, Code Expensify : ${expensifyCode}` : ''}, Renouvellement automatique : ${autoRenew}, Augmentation automatique des licences annuelles : ${autoIncrease}`,
+            sizeWithFrequency: (count: number, isAnnual: boolean) => `${count} ${count === 1 ? 'membre' : 'membres'} (${isAnnual ? 'Annuel' : 'Mensuel'})`,
             none: 'aucun',
             on: 'activé',
             off: 'désactivé',

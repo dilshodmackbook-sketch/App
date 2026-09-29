@@ -11250,8 +11250,7 @@ ${reportName}`,
         subscriptionSettings: {
             title: 'Ρυθμίσεις συνδρομής',
             editSubscription: 'Επεξεργασία συνδρομής',
-            summary: (subscriptionType: string, subscriptionSize: string, expensifyCode: string, autoRenew: string, autoIncrease: string) =>
-                `Τύπος συνδρομής: ${subscriptionType}, Μέγεθος συνδρομής: ${subscriptionSize}${expensifyCode ? `, κωδικός Expensify: ${expensifyCode}` : ''}, Αυτόματη ανανέωση: ${autoRenew}, Αυτόματη ετήσια αύξηση θέσεων: ${autoIncrease}`,
+            sizeWithFrequency: (count: number, isAnnual: boolean) => `${count} ${count === 1 ? 'μέλος' : 'μέλη'} (${isAnnual ? 'Ετήσια' : 'Μηνιαία'})`,
             none: 'κανένα',
             on: 'ενεργό',
             off: 'κλειστό',

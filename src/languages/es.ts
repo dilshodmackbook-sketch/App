@@ -11221,8 +11221,7 @@ ${reportName}`,
         paymentHistory: {title: 'Ver historial de pagos', subtitle: 'Tu historial completo de pagos mensuales cargados a esta cuenta.'},
         subscriptionSettings: {
             title: 'Configuración de suscripción',
-            summary: (subscriptionType, subscriptionSize, expensifyCode, autoRenew, autoIncrease) =>
-                `Tipo de suscripción: ${subscriptionType}, Tamaño de suscripción: ${subscriptionSize}${expensifyCode ? `, Código Expensify: ${expensifyCode}` : ''}, Renovación automática: ${autoRenew}, Aumento automático de asientos anuales: ${autoIncrease}`,
+            sizeWithFrequency: (count, isAnnual) => `${count} ${count === 1 ? 'miembro' : 'miembros'} (${isAnnual ? 'Anual' : 'Mensual'})`,
             none: 'ninguno',
             on: 'activado',
             off: 'desactivado',

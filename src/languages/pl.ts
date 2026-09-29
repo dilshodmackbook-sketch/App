@@ -10959,8 +10959,7 @@ Dodaj więcej zasad wydatków, żeby chronić płynność finansową firmy.`,
         paymentHistory: {title: 'Zobacz historię płatności', subtitle: 'Pełna miesięczna historia płatności obciążających to konto.'},
         subscriptionSettings: {
             title: 'Ustawienia subskrypcji',
-            summary: (subscriptionType: string, subscriptionSize: string, expensifyCode: string, autoRenew: string, autoIncrease: string) =>
-                `Typ subskrypcji: ${subscriptionType}, Rozmiar subskrypcji: ${subscriptionSize}${expensifyCode ? `, Kod Expensify: ${expensifyCode}` : ''}, Automatyczne odnawianie: ${autoRenew}, Automatyczne zwiększanie rocznych miejsc: ${autoIncrease}`,
+            sizeWithFrequency: (count: number, isAnnual: boolean) => `${count} ${count === 1 ? 'członek' : 'członków'} (${isAnnual ? 'Rocznie' : 'Miesięcznie'})`,
             none: 'brak',
             on: 'włączony',
             off: 'wyłączone',

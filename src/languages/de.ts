@@ -11028,8 +11028,7 @@ Fügen Sie weitere Ausgabelimits hinzu, um den Cashflow Ihres Unternehmens zu sc
         paymentHistory: {title: 'Zahlungsverlauf anzeigen', subtitle: 'Ihre vollständige monatliche Zahlungshistorie, die diesem Konto belastet wurde.'},
         subscriptionSettings: {
             title: 'Abonnementeinstellungen',
-            summary: (subscriptionType: string, subscriptionSize: string, expensifyCode: string, autoRenew: string, autoIncrease: string) =>
-                `Abonnementstyp: ${subscriptionType}, Abonnementgröße: ${subscriptionSize}${expensifyCode ? `, Expensify-Code: ${expensifyCode}` : ''}, Automatische Verlängerung: ${autoRenew}, Automatische jährliche Sitzplatzerhöhung: ${autoIncrease}`,
+            sizeWithFrequency: (count: number, isAnnual: boolean) => `${count} ${count === 1 ? 'Mitglied' : 'Mitglieder'} (${isAnnual ? 'Jährlich' : 'Monatlich'})`,
             none: 'keine',
             on: 'an',
             off: 'aus',

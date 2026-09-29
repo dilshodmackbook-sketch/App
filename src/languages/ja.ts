@@ -10814,8 +10814,7 @@ ${reportName}`,
         paymentHistory: {title: '支払い履歴を表示', subtitle: 'このアカウントに請求された毎月の支払い履歴のすべてです。'},
         subscriptionSettings: {
             title: 'サブスクリプション設定',
-            summary: (subscriptionType: string, subscriptionSize: string, expensifyCode: string, autoRenew: string, autoIncrease: string) =>
-                `サブスクリプションタイプ: ${subscriptionType}、サブスクリプション規模: ${subscriptionSize}${expensifyCode ? `、Expensifyコード: ${expensifyCode}` : ''}、自動更新: ${autoRenew}、年間席数の自動増加: ${autoIncrease}`,
+            sizeWithFrequency: (count: number, isAnnual: boolean) => `${count}名のメンバー (${isAnnual ? '年間' : '月間'})`,
             none: 'なし',
             on: 'オン',
             off: 'オフ',
