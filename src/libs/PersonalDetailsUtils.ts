@@ -352,6 +352,25 @@ function getCurrentAddress(privatePersonalDetails: OnyxEntry<PrivatePersonalDeta
 }
 
 /**
+ * Whether the profile already has a legal first and last name on file.
+ * Shared by the deposit-account flows so they decide the same way whether to ask for a name.
+ */
+function hasLegalName(privatePersonalDetails: OnyxEntry<PrivatePersonalDetails>): boolean {
+    return !!privatePersonalDetails?.legalFirstName && !!privatePersonalDetails?.legalLastName;
+}
+
+/**
+ * Whether the profile already has a complete address on file (state is only required for US/Canada).
+ * Shared by the deposit-account flows so they decide the same way whether to ask for an address.
+ */
+function hasCompleteAddress(privatePersonalDetails: OnyxEntry<PrivatePersonalDetails>): boolean {
+    const currentAddress = getCurrentAddress(privatePersonalDetails);
+    const isUsOrCanada = currentAddress?.country === CONST.COUNTRY.US || currentAddress?.country === CONST.COUNTRY.CA;
+    const hasValidState = !isUsOrCanada || !!currentAddress?.state;
+    return !!currentAddress?.street && !!currentAddress?.city && hasValidState && !!currentAddress?.zip;
+}
+
+/**
  * Builds a PersonalDetailsForm snapshot from Onyx private details,
  * optionally layering draft values on top so in-progress edits win.
  */
@@ -544,6 +563,8 @@ export {
     getLoginsByAccountIDs,
     getPersonalDetailsOnyxDataForOptimisticUsers,
     getCurrentAddress,
+    hasLegalName,
+    hasCompleteAddress,
     getFormattedAddress,
     getFormattedStreet,
     getPrivatePersonalDetailsFormValues,

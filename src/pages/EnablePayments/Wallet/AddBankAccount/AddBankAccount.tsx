@@ -13,9 +13,11 @@ import useThemeStyles from '@hooks/useThemeStyles';
 import {addPersonalBankAccount, clearPersonalBankAccount} from '@libs/actions/BankAccounts';
 import {continueSetup} from '@libs/actions/PaymentMethods';
 import {updateCurrentStep} from '@libs/actions/Wallet';
+import {getCurrentAddress, getStreetLines, hasCompleteAddress, hasLegalName} from '@libs/PersonalDetailsUtils';
 
 import Navigation from '@navigation/Navigation';
 
+import LegalName from '@pages/AddPersonalBankAccountPage/substeps/LegalNameStep';
 import useIsBankAccountAdded from '@pages/EnablePayments/Wallet/utils/useIsBankAccountAdded';
 
 import CONST from '@src/CONST';
@@ -27,6 +29,7 @@ import React, {useCallback, useContext} from 'react';
 import {View} from 'react-native';
 
 import SetupMethod from './SetupMethod';
+import Address from './substeps/AddressStep';
 import Confirmation from './substeps/ConfirmationStep';
 import Plaid from './substeps/PlaidStep';
 
@@ -34,6 +37,8 @@ const ADD_BANK_ACCOUNT_SUB_PAGES = CONST.ENABLE_PAYMENTS.ADD_BANK_ACCOUNT_STEP.S
 
 const plaidPages = [
     {pageName: ADD_BANK_ACCOUNT_SUB_PAGES.PLAID, component: Plaid},
+    {pageName: ADD_BANK_ACCOUNT_SUB_PAGES.LEGAL_NAME, component: LegalName},
+    {pageName: ADD_BANK_ACCOUNT_SUB_PAGES.ADDRESS, component: Address},
     {pageName: ADD_BANK_ACCOUNT_SUB_PAGES.CONFIRMATION, component: Confirmation},
 ];
 
@@ -43,6 +48,7 @@ function AddBankAccount() {
     const [plaidData] = useOnyx(ONYXKEYS.PLAID_DATA);
     const [personalBankAccount] = useOnyx(ONYXKEYS.PERSONAL_BANK_ACCOUNT);
     const [personalBankAccountDraft] = useOnyx(ONYXKEYS.FORMS.PERSONAL_BANK_ACCOUNT_FORM_DRAFT);
+    const [privatePersonalDetails] = useOnyx(ONYXKEYS.PRIVATE_PERSONAL_DETAILS);
     const [personalPolicyID] = useOnyx(ONYXKEYS.PERSONAL_POLICY_ID);
     const {translate} = useLocalize();
     const styles = useThemeStyles();
@@ -68,14 +74,41 @@ function AddBankAccount() {
                       ...selectedPlaidBankAccount,
                       plaidAccessToken: plaidData?.plaidAccessToken ?? '',
                   };
-            addPersonalBankAccount(bankAccountWithToken, personalPolicyID);
+
+            // Send the legal name and address the same way the standalone AddPersonalBankAccountPage does: default to
+            // the saved profile values (covers the skipped steps), then let the values just entered in the draft win.
+            const currentAddress = getCurrentAddress(privatePersonalDetails);
+            const [addressStreet, street2] = getStreetLines(currentAddress?.street);
+            addPersonalBankAccount(
+                {
+                    legalFirstName: privatePersonalDetails?.legalFirstName,
+                    legalLastName: privatePersonalDetails?.legalLastName,
+                    addressStreet,
+                    addressStreet2: street2 ?? currentAddress?.street2 ?? currentAddress?.addressLine2,
+                    addressCity: currentAddress?.city,
+                    addressState: currentAddress?.state,
+                    addressZipCode: currentAddress?.zip,
+                    country: currentAddress?.country ?? CONST.COUNTRY.US,
+                    ...personalBankAccountDraft,
+                    ...bankAccountWithToken,
+                },
+                personalPolicyID,
+            );
         }
-    }, [isBankAccountAlreadyAdded, personalBankAccountDraft?.plaidAccountID, plaidData?.bankAccounts, plaidData?.plaidAccessToken, personalPolicyID]);
+    }, [isBankAccountAlreadyAdded, personalBankAccountDraft, plaidData?.bankAccounts, plaidData?.plaidAccessToken, personalPolicyID, privatePersonalDetails]);
 
     const isSetupTypeChosen = personalBankAccountDraft?.setupType === CONST.BANK_ACCOUNT.SETUP_TYPE.PLAID;
 
+    // Only ask for the name/address we don't already have on file, matching the standalone flow. Skipping by page
+    // name (not index) keeps this correct even though the wallet page list differs from the standalone one.
+    const skipPages = [
+        hasLegalName(privatePersonalDetails) ? ADD_BANK_ACCOUNT_SUB_PAGES.LEGAL_NAME : undefined,
+        hasCompleteAddress(privatePersonalDetails) ? ADD_BANK_ACCOUNT_SUB_PAGES.ADDRESS : undefined,
+    ].filter((pageName): pageName is NonNullable<typeof pageName> => !!pageName);
+
     const {CurrentPage, isEditing, pageIndex, nextPage, prevPage, moveTo, isRedirecting} = useSubPage<SubPageProps, EnablePaymentsSubPageType>({
         pages: plaidPages,
+        skipPages,
         // Once the bank account is added there is nothing to redo on the Plaid sub-page, so a revisit shows only the confirmation.
         startFrom: isBankAccountAlreadyAdded ? confirmationPageIndex : 0,
         onFinished: submit,

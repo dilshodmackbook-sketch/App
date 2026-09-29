@@ -11,6 +11,7 @@ import type {SubPageProps} from '@hooks/useSubPage/types';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {getLatestErrorMessage} from '@libs/ErrorUtils';
+import {getCurrentAddress} from '@libs/PersonalDetailsUtils';
 
 import useIsBankAccountAdded from '@pages/EnablePayments/Wallet/utils/useIsBankAccountAdded';
 
@@ -32,6 +33,7 @@ function ConfirmationStep({onNext, onMove}: ConfirmationStepProps) {
     const {isOffline} = useNetwork();
     const [personalBankAccountDraft] = useOnyx(ONYXKEYS.FORMS.PERSONAL_BANK_ACCOUNT_FORM_DRAFT);
     const [personalBankAccount] = useOnyx(ONYXKEYS.PERSONAL_BANK_ACCOUNT);
+    const [privatePersonalDetails] = useOnyx(ONYXKEYS.PRIVATE_PERSONAL_DETAILS);
     const {isBankAccountAdded, addedBankAccount} = useIsBankAccountAdded();
 
     const isLoading = personalBankAccount?.isLoading ?? false;
@@ -39,6 +41,19 @@ function ConfirmationStep({onNext, onMove}: ConfirmationStepProps) {
 
     const bankName = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.BANK_NAME] ?? addedBankAccount?.title;
     const accountNumber = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.ACCOUNT_NUMBER] ?? addedBankAccount?.accountData?.accountNumber ?? '';
+
+    const currentAddress = getCurrentAddress(privatePersonalDetails);
+    const legalFirstName = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.FIRST_NAME] ?? privatePersonalDetails?.legalFirstName ?? '';
+    const legalLastName = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.LAST_NAME] ?? privatePersonalDetails?.legalLastName ?? '';
+    const legalName = `${legalFirstName} ${legalLastName}`.trim();
+    const addressLine = [
+        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.STREET] ?? currentAddress?.street,
+        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.CITY] ?? currentAddress?.city,
+        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.STATE] ?? currentAddress?.state,
+        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.ZIP_CODE] ?? currentAddress?.zip,
+    ]
+        .filter(Boolean)
+        .join(', ');
 
     const handleModifyAccountNumbers = () => {
         onMove(BANK_INFO_STEP_INDEXES.ACCOUNT_NUMBERS);
@@ -65,6 +80,36 @@ function ConfirmationStep({onNext, onMove}: ConfirmationStepProps) {
                     )}
                 </MenuItem.Row>
             </MenuItem.Root>
+            {!!legalName && (
+                <MenuItem.Root onPress={!isBankAccountAdded ? () => onMove(BANK_INFO_STEP_INDEXES.LEGAL_NAME) : undefined}>
+                    <MenuItem.Row>
+                        <MenuItem.Content>
+                            <MenuItem.FieldName>{translate('personalInfoStep.legalName')}</MenuItem.FieldName>
+                            <MenuItem.FieldValue>{legalName}</MenuItem.FieldValue>
+                        </MenuItem.Content>
+                        {!isBankAccountAdded && (
+                            <MenuItem.Trailing>
+                                <MenuItem.Chevron />
+                            </MenuItem.Trailing>
+                        )}
+                    </MenuItem.Row>
+                </MenuItem.Root>
+            )}
+            {!!addressLine && (
+                <MenuItem.Root onPress={!isBankAccountAdded ? () => onMove(BANK_INFO_STEP_INDEXES.ADDRESS) : undefined}>
+                    <MenuItem.Row>
+                        <MenuItem.Content>
+                            <MenuItem.FieldName>{translate('common.personalAddress')}</MenuItem.FieldName>
+                            <MenuItem.FieldValue>{addressLine}</MenuItem.FieldValue>
+                        </MenuItem.Content>
+                        {!isBankAccountAdded && (
+                            <MenuItem.Trailing>
+                                <MenuItem.Chevron />
+                            </MenuItem.Trailing>
+                        )}
+                    </MenuItem.Row>
+                </MenuItem.Root>
+            )}
             <View style={[styles.ph5, styles.pb5, styles.flexGrow1, styles.justifyContentEnd]}>
                 {!!error && error.length > 0 && (
                     <DotIndicatorMessage
