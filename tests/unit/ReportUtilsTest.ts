@@ -4301,6 +4301,64 @@ describe('ReportUtils', () => {
                 expect(requiresAttentionFromCurrentUser(policyExpenseChat, currentUserEmail, currentUserAccountID)).toBe(false);
             });
 
+            // Submitting clears the chat's iouReportID, so the only link to the held report is its REPORT_PREVIEW.
+            const seedSubmittedHeldChild = async (holderAccountID: number) => {
+                const seeded = await seedHeldChildExpense(holderAccountID);
+                const policyExpenseChat = {...seeded, iouReportID: undefined};
+                await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${policyExpenseChat.reportID}`, policyExpenseChat);
+                const reportPreview: ReportAction = {
+                    reportActionID: 'preview_7201',
+                    actionName: CONST.REPORT.ACTIONS.TYPE.REPORT_PREVIEW,
+                    created: '2024-01-01 00:00:00.000',
+                    actorAccountID: otherUserAccountID,
+                    childReportID: expenseReportID,
+                    childManagerAccountID: currentUserAccountID,
+                    shouldShow: true,
+                    message: [{type: 'COMMENT', html: 'Expense report', text: 'Expense report'}],
+                    originalMessage: {linkedReportID: expenseReportID},
+                };
+                await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${policyExpenseChat.reportID}`, {[reportPreview.reportActionID]: reportPreview});
+                await waitForBatchedUpdates();
+                return policyExpenseChat;
+            };
+
+            it('does not require attention after submit when another user placed the hold', async () => {
+                // Given a submitted all-held report whose chat no longer points at it through iouReportID
+                const policyExpenseChat = await seedSubmittedHeldChild(otherUserAccountID);
+
+                // When the approver's attention is derived, then the held report found through its preview drops the chat
+                expect(requiresAttentionFromCurrentUser(policyExpenseChat, currentUserEmail, currentUserAccountID)).toBe(false);
+            });
+
+            it('still requires attention after submit when an outstanding sibling report is not loaded yet', async () => {
+                // Given a submitted all-held report and a sibling preview whose report isn't in Onyx yet
+                const policyExpenseChat = await seedSubmittedHeldChild(otherUserAccountID);
+                const unloadedSiblingPreview: ReportAction = {
+                    reportActionID: 'preview_7299',
+                    actionName: CONST.REPORT.ACTIONS.TYPE.REPORT_PREVIEW,
+                    created: '2024-01-02 00:00:00.000',
+                    actorAccountID: otherUserAccountID,
+                    childReportID: '7299',
+                    childStatusNum: CONST.REPORT.STATUS_NUM.SUBMITTED,
+                    shouldShow: true,
+                    message: [{type: 'COMMENT', html: 'Expense report', text: 'Expense report'}],
+                    originalMessage: {linkedReportID: '7299'},
+                };
+                await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${policyExpenseChat.reportID}`, {[unloadedSiblingPreview.reportActionID]: unloadedSiblingPreview});
+                await waitForBatchedUpdates();
+
+                // When the approver's attention is derived, then the unknown sibling keeps the chat's outstanding flag
+                expect(requiresAttentionFromCurrentUser(policyExpenseChat, currentUserEmail, currentUserAccountID)).toBe(true);
+            });
+
+            it('still requires attention after submit when the current user placed the hold', async () => {
+                // Given a submitted all-held report where the current user placed the hold
+                const policyExpenseChat = await seedSubmittedHeldChild(currentUserAccountID);
+
+                // When the approver's attention is derived, then it stays since only they can remove the hold
+                expect(requiresAttentionFromCurrentUser(policyExpenseChat, currentUserEmail, currentUserAccountID)).toBe(true);
+            });
+
             it('still requires attention when the current user placed the hold', async () => {
                 const policyExpenseChat = await seedHeldChildExpense(currentUserAccountID);
 
