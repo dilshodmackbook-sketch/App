@@ -11,8 +11,8 @@ import type {SubPageProps} from '@hooks/useSubPage/types';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {getLatestErrorMessage} from '@libs/ErrorUtils';
-import {getCurrentAddress} from '@libs/PersonalDetailsUtils';
 
+import getBankAccountOwnerDetails from '@pages/EnablePayments/Wallet/utils/getBankAccountOwnerDetails';
 import useIsBankAccountAdded from '@pages/EnablePayments/Wallet/utils/useIsBankAccountAdded';
 
 import CONST from '@src/CONST';
@@ -42,16 +42,9 @@ function ConfirmationStep({onNext, onMove}: ConfirmationStepProps) {
     const bankName = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.BANK_NAME] ?? addedBankAccount?.title;
     const accountNumber = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.ACCOUNT_NUMBER] ?? addedBankAccount?.accountData?.accountNumber ?? '';
 
-    const currentAddress = getCurrentAddress(privatePersonalDetails);
-    const legalFirstName = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.FIRST_NAME] ?? privatePersonalDetails?.legalFirstName ?? '';
-    const legalLastName = personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.LAST_NAME] ?? privatePersonalDetails?.legalLastName ?? '';
-    const legalName = `${legalFirstName} ${legalLastName}`.trim();
-    const addressLine = [
-        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.STREET] ?? currentAddress?.street,
-        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.CITY] ?? currentAddress?.city,
-        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.STATE] ?? currentAddress?.state,
-        personalBankAccountDraft?.[BANK_INFO_STEP_KEYS.ZIP_CODE] ?? currentAddress?.zip,
-    ]
+    const ownerDetails = getBankAccountOwnerDetails(privatePersonalDetails, personalBankAccountDraft);
+    const legalName = [ownerDetails.legalFirstName, ownerDetails.legalLastName].filter(Boolean).join(' ');
+    const addressLine = [ownerDetails.addressStreet, ownerDetails.addressStreet2, ownerDetails.addressCity, ownerDetails.addressState, ownerDetails.addressZipCode]
         .filter(Boolean)
         .join(', ');
 

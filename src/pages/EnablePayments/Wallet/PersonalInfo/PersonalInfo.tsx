@@ -10,6 +10,7 @@ import getWalletPersonalDetailsParams from '@pages/EnablePayments/shared/getWall
 import IdologyQuestions from '@pages/EnablePayments/shared/IdologyQuestions';
 import useWalletPhoneValidateCode from '@pages/EnablePayments/shared/useWalletPhoneValidateCode';
 import getInitialSubstepForPersonalInfo from '@pages/EnablePayments/Wallet/utils/getInitialSubstepForPersonalInfo';
+import getSkippedPagesForPersonalInfo from '@pages/EnablePayments/Wallet/utils/getSkippedPagesForPersonalInfo';
 import getSubstepValues from '@pages/EnablePayments/Wallet/utils/getSubstepValues';
 
 import {setAdditionalDetailsQuestions, updateCurrentStep} from '@userActions/Wallet';
@@ -20,7 +21,7 @@ import ONYXKEYS from '@src/ONYXKEYS';
 import ROUTES from '@src/ROUTES';
 import INPUT_IDS from '@src/types/form/WalletAdditionalDetailsForm';
 
-import {useMemo} from 'react';
+import {useMemo, useState} from 'react';
 
 import Address from './substeps/AddressStep';
 import Confirmation from './substeps/ConfirmationStep';
@@ -59,8 +60,13 @@ function PersonalInfoPage() {
 
     const startFrom = useMemo(() => getInitialSubstepForPersonalInfo(values), [values]);
 
+    // Decided once on open, so a name or address typed here doesn't hide its own page from Back
+    const [skipPages] = useState(() => getSkippedPagesForPersonalInfo(values));
+    const firstPageIndex = formPages.findIndex((page) => !skipPages.includes(page.pageName));
+
     const {CurrentPage, isEditing, pageIndex, nextPage, prevPage, moveTo, isRedirecting} = useSubPage<SubPageProps, EnablePaymentsSubPageType>({
         pages: formPages,
+        skipPages,
         startFrom,
         onFinished: submit,
         buildRoute: (pageName, action) =>
@@ -82,7 +88,7 @@ function PersonalInfoPage() {
             return;
         }
 
-        if (pageIndex === 0) {
+        if (pageIndex <= firstPageIndex) {
             // Step back to the Add Bank Account step; the URL correction in EnablePaymentsPage navigates there.
             updateCurrentStep(CONST.WALLET.STEP.ADD_BANK_ACCOUNT);
             return;

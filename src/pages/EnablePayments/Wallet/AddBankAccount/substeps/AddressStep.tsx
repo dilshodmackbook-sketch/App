@@ -7,10 +7,11 @@ import type {SubPageProps} from '@hooks/useSubPage/types';
 
 import {getCurrentAddress} from '@libs/PersonalDetailsUtils';
 
+import CONST from '@src/CONST';
 import ONYXKEYS from '@src/ONYXKEYS';
 import INPUT_IDS from '@src/types/form/PersonalBankAccountForm';
 
-import React, {useMemo} from 'react';
+import React from 'react';
 
 const BANK_INFO_STEP_KEY = INPUT_IDS.BANK_INFO_STEP;
 
@@ -19,27 +20,28 @@ const INPUT_KEYS = {
     city: BANK_INFO_STEP_KEY.CITY,
     state: BANK_INFO_STEP_KEY.STATE,
     zipCode: BANK_INFO_STEP_KEY.ZIP_CODE,
+    country: BANK_INFO_STEP_KEY.COUNTRY,
 };
 
 const STEP_FIELDS = [BANK_INFO_STEP_KEY.STREET, BANK_INFO_STEP_KEY.CITY, BANK_INFO_STEP_KEY.STATE, BANK_INFO_STEP_KEY.ZIP_CODE];
 
-// The wallet Add bank account route has no `country` sub-route, so this reuses the shared US-only address
-// form (state picker, country locked to US) instead of the standalone AddressStep's country-selector form.
+// US-only form like wallet KYC, the standalone AddressStep's country picker has no route here
 function AddressStep({onNext, onMove, isEditing}: SubPageProps) {
     const {translate} = useLocalize();
 
     const [personalBankAccountDraft] = useOnyx(ONYXKEYS.FORMS.PERSONAL_BANK_ACCOUNT_FORM_DRAFT);
     const [privatePersonalDetails] = useOnyx(ONYXKEYS.PRIVATE_PERSONAL_DETAILS);
 
-    const defaultValues = useMemo(() => {
-        const currentAddress = getCurrentAddress(privatePersonalDetails);
-        return {
-            street: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.STREET] ?? currentAddress?.street ?? '',
-            city: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.CITY] ?? currentAddress?.city ?? '',
-            state: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.STATE] ?? currentAddress?.state ?? '',
-            zipCode: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.ZIP_CODE] ?? currentAddress?.zip ?? '',
-        };
-    }, [personalBankAccountDraft, privatePersonalDetails]);
+    // Only prefill a profile address this US-only form can hold
+    const savedAddress = getCurrentAddress(privatePersonalDetails);
+    const currentAddress = !savedAddress?.country || savedAddress.country === CONST.COUNTRY.US ? savedAddress : undefined;
+    const defaultValues = {
+        street: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.STREET] ?? currentAddress?.street ?? '',
+        city: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.CITY] ?? currentAddress?.city ?? '',
+        state: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.STATE] ?? currentAddress?.state ?? '',
+        zipCode: personalBankAccountDraft?.[BANK_INFO_STEP_KEY.ZIP_CODE] ?? currentAddress?.zip ?? '',
+        country: CONST.COUNTRY.US,
+    };
 
     const handleSubmit = usePersonalBankAccountDetailsFormSubmit({
         fieldIds: STEP_FIELDS,

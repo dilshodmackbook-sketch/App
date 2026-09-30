@@ -11,13 +11,15 @@ import type {SubPageProps} from '@hooks/useSubPage/types';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {addPersonalBankAccount, clearPersonalBankAccount} from '@libs/actions/BankAccounts';
+import {setDraftValues} from '@libs/actions/FormActions';
 import {continueSetup} from '@libs/actions/PaymentMethods';
 import {updateCurrentStep} from '@libs/actions/Wallet';
-import {getCurrentAddress, getStreetLines, hasCompleteAddress, hasLegalName} from '@libs/PersonalDetailsUtils';
+import {hasLegalName} from '@libs/PersonalDetailsUtils';
 
 import Navigation from '@navigation/Navigation';
 
 import LegalName from '@pages/AddPersonalBankAccountPage/substeps/LegalNameStep';
+import getBankAccountOwnerDetails, {hasCompleteUSAddress} from '@pages/EnablePayments/Wallet/utils/getBankAccountOwnerDetails';
 import useIsBankAccountAdded from '@pages/EnablePayments/Wallet/utils/useIsBankAccountAdded';
 
 import CONST from '@src/CONST';
@@ -75,35 +77,27 @@ function AddBankAccount() {
                       plaidAccessToken: plaidData?.plaidAccessToken ?? '',
                   };
 
-            // Send the legal name and address the same way the standalone AddPersonalBankAccountPage does: default to
-            // the saved profile values (covers the skipped steps), then let the values just entered in the draft win.
-            const currentAddress = getCurrentAddress(privatePersonalDetails);
-            const [addressStreet, street2] = getStreetLines(currentAddress?.street);
-            addPersonalBankAccount(
-                {
-                    legalFirstName: privatePersonalDetails?.legalFirstName,
-                    legalLastName: privatePersonalDetails?.legalLastName,
-                    addressStreet,
-                    addressStreet2: street2 ?? currentAddress?.street2 ?? currentAddress?.addressLine2,
-                    addressCity: currentAddress?.city,
-                    addressState: currentAddress?.state,
-                    addressZipCode: currentAddress?.zip,
-                    country: currentAddress?.country ?? CONST.COUNTRY.US,
-                    ...personalBankAccountDraft,
-                    ...bankAccountWithToken,
-                },
-                personalPolicyID,
-            );
+            const ownerDetails = getBankAccountOwnerDetails(privatePersonalDetails, personalBankAccountDraft);
+            addPersonalBankAccount({...personalBankAccountDraft, ...ownerDetails, ...bankAccountWithToken}, personalPolicyID);
+
+            // Hand the same name and address to the KYC step so it doesn't ask for them again
+            setDraftValues(ONYXKEYS.FORMS.WALLET_ADDITIONAL_DETAILS, {
+                legalFirstName: ownerDetails.legalFirstName,
+                legalLastName: ownerDetails.legalLastName,
+                addressStreet: [ownerDetails.addressStreet, ownerDetails.addressStreet2].filter(Boolean).join(', '),
+                addressCity: ownerDetails.addressCity,
+                addressState: ownerDetails.addressState,
+                addressZipCode: ownerDetails.addressZipCode,
+            });
         }
     }, [isBankAccountAlreadyAdded, personalBankAccountDraft, plaidData?.bankAccounts, plaidData?.plaidAccessToken, personalPolicyID, privatePersonalDetails]);
 
     const isSetupTypeChosen = personalBankAccountDraft?.setupType === CONST.BANK_ACCOUNT.SETUP_TYPE.PLAID;
 
-    // Only ask for the name/address we don't already have on file, matching the standalone flow. Skipping by page
-    // name (not index) keeps this correct even though the wallet page list differs from the standalone one.
+    // Only ask for the name/address we don't already have on file, same as the standalone flow
     const skipPages = [
         hasLegalName(privatePersonalDetails) ? ADD_BANK_ACCOUNT_SUB_PAGES.LEGAL_NAME : undefined,
-        hasCompleteAddress(privatePersonalDetails) ? ADD_BANK_ACCOUNT_SUB_PAGES.ADDRESS : undefined,
+        hasCompleteUSAddress(privatePersonalDetails) ? ADD_BANK_ACCOUNT_SUB_PAGES.ADDRESS : undefined,
     ].filter((pageName): pageName is NonNullable<typeof pageName> => !!pageName);
 
     const {CurrentPage, isEditing, pageIndex, nextPage, prevPage, moveTo, isRedirecting} = useSubPage<SubPageProps, EnablePaymentsSubPageType>({
