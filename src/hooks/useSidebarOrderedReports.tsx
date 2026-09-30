@@ -132,6 +132,7 @@ function SidebarOrderedReportsContextProvider({
     const prevPriorityMode = usePrevious(priorityMode);
     const prevIsOffline = usePrevious(isOffline);
     const prevConciergeReportID = usePrevious(conciergeReportID);
+    const prevReportAttributes = usePrevious(reportAttributes);
 
     /**
      * Find the reports that need to be updated in the LHN
@@ -186,6 +187,17 @@ function SidebarOrderedReportsContextProvider({
             }
         }
 
+        // Re-queue reports whose visibility-relevant attributes hydrated late (compare fields, not references, to avoid a full scan).
+        if (reportAttributes !== prevReportAttributes) {
+            for (const reportID of Object.keys(reportAttributes ?? {})) {
+                const next = reportAttributes?.[reportID];
+                const prev = prevReportAttributes?.[reportID];
+                if (!prev || next?.requiresAttention !== prev.requiresAttention || next?.isEmpty !== prev.isEmpty || next?.brickRoadStatus !== prev.brickRoadStatus) {
+                    reportsToUpdate.add(`${ONYXKEYS.COLLECTION.REPORT}${reportID}`);
+                }
+            }
+        }
+
         // Make sure the previous and current reports are always included in the updates when we switch reports.
         if (prevDerivedCurrentReportID !== derivedCurrentReportID) {
             reportsToUpdate.add(`${ONYXKEYS.COLLECTION.REPORT}${prevDerivedCurrentReportID}`);
@@ -212,6 +224,8 @@ function SidebarOrderedReportsContextProvider({
         prevConciergeReportID,
         prevDerivedCurrentReportID,
         derivedCurrentReportID,
+        reportAttributes,
+        prevReportAttributes,
     ]);
 
     const reportsToDisplayInLHN = useMemo(() => {
