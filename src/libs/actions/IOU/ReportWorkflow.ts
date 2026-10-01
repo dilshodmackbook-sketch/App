@@ -413,9 +413,12 @@ function getIOUReportActionWithBadge(
 ): {
     reportAction: OnyxEntry<ReportAction>;
     actionBadge?: ValueOf<typeof CONST.REPORT.ACTION_BADGE>;
+    areChildReportsEvaluated: boolean;
 } {
     let actionBadge: ValueOf<typeof CONST.REPORT.ACTION_BADGE> | undefined;
     let earliestAction: ReportAction | undefined;
+    let hasEvaluatedChildReport = false;
+    let hasUnevaluatedChildReport = false;
 
     for (const action of Object.values(chatReportActions ?? {})) {
         if (action?.actionName !== CONST.REPORT.ACTIONS.TYPE.REPORT_PREVIEW || isDeletedAction(action)) {
@@ -439,10 +442,13 @@ function getIOUReportActionWithBadge(
                     earliestAction = action;
                     actionBadge = CONST.REPORT.ACTION_BADGE.PAY;
                 }
+            } else if (action.childStatusNum !== CONST.REPORT.STATUS_NUM.REIMBURSED) {
+                hasUnevaluatedChildReport = true;
             }
             continue;
         }
 
+        hasEvaluatedChildReport = true;
         const iouReportActions = allReportActions?.[`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${iouReport.reportID}`];
 
         // An all-held report yields no badge, so it can't win the "oldest action" race and hide a sibling report that
@@ -458,7 +464,11 @@ function getIOUReportActionWithBadge(
         }
     }
 
-    return {reportAction: earliestAction, actionBadge};
+    return {
+        reportAction: earliestAction,
+        actionBadge,
+        areChildReportsEvaluated: hasEvaluatedChildReport && !hasUnevaluatedChildReport,
+    };
 }
 
 /**

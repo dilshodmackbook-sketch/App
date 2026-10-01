@@ -4634,7 +4634,11 @@ function getReasonAndReportActionThatRequiresAttention(
     const actionTypeForAssigneeToComplete = getActionTypeForAssigneeToComplete(optionOrReport, parentReportAction);
 
     // Compute IOU candidate upfront so we can compare timestamps with task candidate
-    const {reportAction: iouReportActionToApproveOrPay, actionBadge} = getIOUReportActionWithBadge(
+    const {
+        reportAction: iouReportActionToApproveOrPay,
+        actionBadge,
+        areChildReportsEvaluated,
+    } = getIOUReportActionWithBadge(
         optionOrReport,
         policy,
         optionReportMetadata,
@@ -4660,7 +4664,8 @@ function getReasonAndReportActionThatRequiresAttention(
     // Has a child report that is awaiting action (e.g. approve, pay, add bank account) from current user.
     // A report whose only expenses are pending Expensify Card transactions can't be actioned until they post, so it
     // shouldn't demand attention even when the chat still carries an outstanding-child flag.
-    const hasStaleChildRequest = isTripRoom(optionOrReport) && (optionOrReport.transactionCount ?? 0) === 0;
+    // The server flag doesn't know about holds, so it only counts when some child report couldn't be checked locally.
+    const hasStaleChildRequest = (isTripRoom(optionOrReport) && (optionOrReport.transactionCount ?? 0) === 0) || areChildReportsEvaluated;
     const hasValidIOUAction =
         ((optionOrReport.hasOutstandingChildRequest === true && !hasStaleChildRequest) || iouReportActionToApproveOrPay?.reportActionID) &&
         !hasOnlyPendingTransactions &&
