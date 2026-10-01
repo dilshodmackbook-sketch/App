@@ -4377,29 +4377,30 @@ describe('SidebarUtils', () => {
 
             it('should place a locale-specific letter in its Spanish position instead of after Z', () => {
                 // Given pinned chats from the issue where one name starts with "Ñ"
-                const names = ['Zote Report', 'Ñu Safari', 'Nuevo Budget'];
+                const names = ['Zebra Report', 'Ñu Safari', 'Nuevo Budget'];
 
                 // When they are sorted for a Spanish user
                 const sorted = sortPinned(names, 'es');
 
                 // Then "Ñ" sorts as its own letter right after "N", not by code point after "Z"
-                expect(sorted).toEqual(['Nuevo Budget', 'Ñu Safari', 'Zote Report']);
+                expect(sorted).toEqual(['Nuevo Budget', 'Ñu Safari', 'Zebra Report']);
             });
 
             it('should follow the English collator for an English user', () => {
                 // Given the same pinned chats
-                const names = ['Zote Report', 'Nuevo Budget', 'Ñu Safari'];
+                const names = ['Zebra Report', 'Nuevo Budget', 'Ñu Safari'];
 
                 // When they are sorted for an English user
                 const sorted = sortPinned(names, 'en');
 
                 // Then "Ñ" is treated as "N" with a diacritic, which is the English order
-                expect(sorted).toEqual(['Ñu Safari', 'Nuevo Budget', 'Zote Report']);
+                expect(sorted).toEqual(['Ñu Safari', 'Nuevo Budget', 'Zebra Report']);
             });
 
             it('should match a plain collator sort for a mix of plain, accented and punctuation names', () => {
                 // Given names that mix the fast key path and the collator path
-                const names = ['Report 10', 'zebra', '#admins', 'Éclair', 'Report 2', "asdwe's expenses", 'Ölbaum', 'alpha', 'Привет', 'Ñandú', 'nube', 'B 1'];
+                // cspell:disable-next-line
+                const names = ['Report 10', 'zebra', '#admins', 'Éclair', 'Report 2', "John's expenses", 'Ölbaum', 'alpha', 'Привет', 'Ñandú', 'nube', 'B 1'];
 
                 for (const locale of ['en', 'es', 'de', 'sv', 'pl']) {
                     // When they are sorted through the LHN comparator
@@ -4415,6 +4416,7 @@ describe('SidebarUtils', () => {
         describe('buildSortKey', () => {
             it('should not build a key for names whose code-unit order differs from the collator', () => {
                 // Given names with accents, non-Latin letters, punctuation or a digit run longer than the padding
+                // cspell:disable-next-line
                 const names = ['Café', 'Ñu Safari', 'Привет', '#admins', 'Team.Ops', 'Report 12345678901234567'];
 
                 // Then none of them get a key, so they are compared with the collator
@@ -4425,10 +4427,10 @@ describe('SidebarUtils', () => {
 
             it('should build a key for names with apostrophes', () => {
                 // Given a personal expense chat name, which is common in the LHN and orders the same by code unit and collator
-                const key = _buildSortKey("Asdwe's expenses");
+                const key = _buildSortKey("John's expenses");
 
                 // Then it stays on the fast key path
-                expect(key).toBe("asdwe's expenses");
+                expect(key).toBe("john's expenses");
             });
 
             it('should be case-insensitive', () => {
