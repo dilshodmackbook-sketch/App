@@ -14,6 +14,7 @@ import {getPersonalDetailsForAccountIDs} from '@libs/PersonalDetailsUtils';
 import {isPaidGroupPolicy, isPolicyAdmin} from '@libs/PolicyUtils';
 import {getAllReportActions, getElsewherePaymentReportActionMessage, getReportActionHtml, getReportActionText, isCreatedAction} from '@libs/ReportActionsUtils';
 import {
+    getHeldTotalFromTransactions,
     buildOptimisticCancelPaymentReportAction,
     buildOptimisticIOUReportAction,
     getReimbursableTotal,
@@ -257,8 +258,10 @@ function getPayMoneyRequestParams({
     }
 
     const reportTransactions = getReportTransactions(iouReport?.reportID);
-    const unheldReimbursableTotal = getUnheldReimbursableTotal(iouReport);
-    let total = getReimbursableTotal(iouReport);
+    const reimbursableTotal = getReimbursableTotal(iouReport);
+    const heldReimbursableTotal = getHeldTotalFromTransactions(iouReport, reportTransactions, true);
+    const unheldReimbursableTotal = heldReimbursableTotal !== undefined ? reimbursableTotal - heldReimbursableTotal : getUnheldReimbursableTotal(iouReport);
+    let total = reimbursableTotal;
     if (hasHeldExpensesReportUtils(reportTransactions) && !full && !!unheldReimbursableTotal) {
         total = unheldReimbursableTotal;
     }

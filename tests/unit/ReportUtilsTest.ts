@@ -25334,6 +25334,83 @@ describe('ReportUtils', () => {
             const result = getNonHeldAndFullAmount(expenseReport, true, [], convertToDisplayString);
             expect(result.nonHeldAmount).toContain('60.00');
         });
+
+        const buildExpense = (transactionID: number, overrides: Partial<Transaction>): Transaction => ({
+            ...createRandomTransaction(transactionID),
+            currency: CONST.CURRENCY.USD,
+            modifiedAmount: '',
+            modifiedCurrency: '',
+            pendingAction: null,
+            reimbursable: true,
+            comment: {},
+            ...overrides,
+        });
+
+        // The approver's report as captured on the issue: the hold push didn't update unheldTotal and unheldReimbursableTotal is not set
+        const staleApproverReport: Report = {
+            ...createRandomReport(0, undefined),
+            type: CONST.REPORT.TYPE.EXPENSE,
+            currency: CONST.CURRENCY.USD,
+            total: -10000,
+            unheldTotal: -10000,
+            nonReimbursableTotal: 0,
+            unheldNonReimbursableTotal: 0,
+            reimbursableTotal: undefined,
+            unheldReimbursableTotal: undefined,
+        };
+
+        it('excludes the held expense from the non-held amount when the report unheld totals are stale', () => {
+            // Given a $100 report where another participant held a $40 expense and the report unheld totals still equal the full total
+            const transactions = [buildExpense(1, {amount: -6000}), buildExpense(2, {amount: -4000, comment: {hold: '1'}})];
+
+            // When the approver opens the Approve options
+            const result = getNonHeldAndFullAmount(staleApproverReport, false, transactions, convertToDisplayString);
+
+            // Then "Approve only" shows the $60 that isn't held, while the full option keeps $100
+            expect(result.nonHeldAmount).toContain('60.00');
+            expect(result.fullAmount).toContain('100.00');
+            expect(result.hasValidNonHeldAmount).toBe(true);
+        });
+
+        it('only subtracts reimbursable held expenses for the pay options', () => {
+            // Given a stale report where a reimbursable $30 and a non-reimbursable $10 expense are held
+            const report: Report = {...staleApproverReport, nonReimbursableTotal: -1000, reimbursableTotal: -9000};
+            const transactions = [
+                buildExpense(1, {amount: -6000}),
+                buildExpense(2, {amount: -3000, comment: {hold: '1'}}),
+                buildExpense(3, {amount: -1000, reimbursable: false, comment: {hold: '2'}}),
+            ];
+
+            // When the payer opens the Pay options, which only count reimbursable spend
+            const result = getNonHeldAndFullAmount(report, true, transactions, convertToDisplayString);
+
+            // Then the non-held amount drops only the reimbursable held expense
+            expect(result.fullAmount).toContain('90.00');
+            expect(result.nonHeldAmount).toContain('60.00');
+        });
+
+        it('uses the converted amount of a held expense in another currency', () => {
+            // Given a held EUR expense that the backend converted to $40 in the report currency
+            const transactions = [buildExpense(1, {amount: -6000}), buildExpense(2, {amount: -3500, currency: CONST.CURRENCY.EUR, convertedAmount: -4000, comment: {hold: '1'}})];
+
+            // When the approver opens the Approve options
+            const result = getNonHeldAndFullAmount(staleApproverReport, false, transactions, convertToDisplayString);
+
+            // Then the converted held amount is subtracted, not the original EUR amount
+            expect(result.nonHeldAmount).toContain('60.00');
+        });
+
+        it('keeps the report unheld total when a held expense has no amount in the report currency', () => {
+            // Given a held EUR expense with no converted amount yet, so the client can't count it
+            const report: Report = {...staleApproverReport, unheldTotal: -7000};
+            const transactions = [buildExpense(1, {amount: -6000}), buildExpense(2, {amount: -3500, currency: CONST.CURRENCY.EUR, convertedAmount: undefined, comment: {hold: '1'}})];
+
+            // When the approver opens the Approve options
+            const result = getNonHeldAndFullAmount(report, false, transactions, convertToDisplayString);
+
+            // Then the backend unheld total is used instead of a guessed conversion
+            expect(result.nonHeldAmount).toContain('70.00');
+        });
     });
 
     describe('hasExportError', () => {

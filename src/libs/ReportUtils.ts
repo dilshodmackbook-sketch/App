@@ -11947,6 +11947,34 @@ function hasUpdatedTotal(report: OnyxInputOrEntry<Report>, policy: OnyxInputOrEn
 }
 
 /**
+ * Returns the held expenses total in the report currency and sign, or undefined when it can't be counted from the transactions.
+ */
+function getHeldTotalFromTransactions(iouReport: OnyxEntry<Report>, allReportTransactions: Transaction[], shouldExcludeNonReimbursables: boolean): number | undefined {
+    const heldTransactions = allReportTransactions.filter(
+        (transaction) =>
+            isOnHoldTransactionUtils(transaction) &&
+            transaction.pendingAction !== CONST.RED_BRICK_ROAD_PENDING_ACTION.DELETE &&
+            (!shouldExcludeNonReimbursables || !!transaction.reimbursable),
+    );
+    if (!iouReport || heldTransactions.length === 0) {
+        return undefined;
+    }
+    const isExpenseReportLocal = isExpenseReport(iouReport);
+    const coefficient = isExpenseReportLocal ? -1 : 1;
+    let heldTotal = 0;
+    for (const transaction of heldTransactions) {
+        if (getCurrency(transaction) === iouReport.currency) {
+            heldTotal += getTransactionAmount(transaction, isExpenseReportLocal) * coefficient;
+        } else if (transaction.convertedAmount !== undefined && transaction.convertedAmount !== null) {
+            heldTotal += getConvertedAmount(transaction, isExpenseReportLocal) * coefficient;
+        } else {
+            return undefined;
+        }
+    }
+    return heldTotal;
+}
+
+/**
  * Return held and full amount formatted with used currency
  */
 function getNonHeldAndFullAmount(
@@ -11972,6 +12000,12 @@ function getNonHeldAndFullAmount(
     } else {
         total = reimbursableTotal + (iouReport?.nonReimbursableTotal ?? 0);
         unheldTotal = iouReport?.unheldTotal ?? unheldReimbursableTotal + (iouReport?.unheldNonReimbursableTotal ?? 0);
+    }
+
+    // Only the holder's client updates the report unheld totals, so other participants derive them from the held expenses.
+    const heldTotal = getHeldTotalFromTransactions(iouReport, allReportTransactions, shouldExcludeNonReimbursables);
+    if (heldTotal !== undefined) {
+        unheldTotal = total - heldTotal;
     }
 
     const adjustedUnheldTotal = unheldTotal * coefficient;
@@ -14633,6 +14667,7 @@ export {
     getMoneyRequestSpendBreakdown,
     getNegatedReportTotals,
     getNonHeldAndFullAmount,
+    getHeldTotalFromTransactions,
     getReimbursableTotal,
     getUnheldReimbursableTotal,
     getOneOnOneChatParticipants,

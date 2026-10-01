@@ -33,6 +33,7 @@ import {
 } from '@libs/PolicyUtils';
 import {getAllReportActions, getReportActionHtml, getReportActionText, hasPendingDEWApprove, isCreatedAction, isDeletedAction, isOlderReportAction} from '@libs/ReportActionsUtils';
 import {
+    getHeldTotalFromTransactions,
     buildOptimisticApprovedReportAction,
     buildOptimisticChangeApproverReportAction,
     buildOptimisticReopenedReportAction,
@@ -516,8 +517,10 @@ function approveMoneyRequest(params: ApproveMoneyRequestFunctionParams) {
     }
 
     const reportTransactions = getReportTransactions(expenseReport.reportID);
-    const unheldTotal = getUnheldReimbursableTotal(expenseReport) + (expenseReport.unheldNonReimbursableTotal ?? 0);
-    let total = getReimbursableTotal(expenseReport) + (expenseReport.nonReimbursableTotal ?? 0);
+    const fullTotal = getReimbursableTotal(expenseReport) + (expenseReport.nonReimbursableTotal ?? 0);
+    const heldTotal = getHeldTotalFromTransactions(expenseReport, reportTransactions, false);
+    const unheldTotal = heldTotal !== undefined ? fullTotal - heldTotal : getUnheldReimbursableTotal(expenseReport) + (expenseReport.unheldNonReimbursableTotal ?? 0);
+    let total = fullTotal;
     const hasHeldExpenses = hasHeldExpensesReportUtils(reportTransactions);
     if (hasHeldExpenses && !full && !!unheldTotal) {
         total = unheldTotal;
@@ -1387,7 +1390,9 @@ function submitReport({
     const isDEWPolicy = hasDynamicExternalWorkflow(policy);
 
     const shouldSplitHeldExpenses = hasHeldExpenses && !isDEWPolicy && !!parentReport?.reportID;
-    const submittedTotal = shouldSplitHeldExpenses ? (expenseReport.unheldTotal ?? expenseReport.total ?? 0) : (expenseReport.total ?? 0);
+    const heldTotal = getHeldTotalFromTransactions(expenseReport, reportTransactions, false);
+    const unheldTotal = heldTotal !== undefined ? (expenseReport.total ?? 0) - heldTotal : (expenseReport.unheldTotal ?? expenseReport.total ?? 0);
+    const submittedTotal = shouldSplitHeldExpenses ? unheldTotal : (expenseReport.total ?? 0);
 
     const optimisticSubmittedReportAction = buildOptimisticSubmittedReportAction(
         submittedTotal,
