@@ -4356,14 +4356,71 @@ describe('SidebarUtils', () => {
             });
         });
 
-        describe('buildSortKey', () => {
-            it('should sort accented characters by Unicode code point, not locale-aware order', () => {
-                // Given names with accented characters
-                const cafeAccented = _buildSortKey('Café');
-                const cafePlain = _buildSortKey('Cafe');
+        describe('locale-aware display name sorting', () => {
+            const buildMiniReport = (reportID: string, displayName: string) => ({
+                reportID,
+                displayName,
+                sortKey: _buildSortKey(displayName),
+                lastVisibleActionCreated: '2024-01-01 10:00:00',
+            });
+            const sortPinned = (displayNames: string[], locale: string) => {
+                const collator = new Intl.Collator(locale, {usage: 'sort', sensitivity: 'variant', numeric: true, caseFirst: 'upper'});
+                const categories = {
+                    pinnedAndGBRReports: displayNames.map((displayName, index) => buildMiniReport(String(index), displayName)),
+                    errorReports: [],
+                    draftReports: [],
+                    nonArchivedReports: [],
+                    archivedReports: [],
+                };
+                return _sortCategorizedReports(categories, true, collator.compare).pinnedAndGBRReports.map((report) => report.displayName);
+            };
 
-                // Then accented "é" sorts after plain "e" by code point
-                expect(cafeAccented > cafePlain).toBe(true);
+            it('should place a locale-specific letter in its Spanish position instead of after Z', () => {
+                // Given pinned chats from the issue where one name starts with "Ñ"
+                const names = ['Zote Report', 'Ñu Safari', 'Nuevo Budget'];
+
+                // When they are sorted for a Spanish user
+                const sorted = sortPinned(names, 'es');
+
+                // Then "Ñ" sorts as its own letter right after "N", not by code point after "Z"
+                expect(sorted).toEqual(['Nuevo Budget', 'Ñu Safari', 'Zote Report']);
+            });
+
+            it('should follow the English collator for an English user', () => {
+                // Given the same pinned chats
+                const names = ['Zote Report', 'Nuevo Budget', 'Ñu Safari'];
+
+                // When they are sorted for an English user
+                const sorted = sortPinned(names, 'en');
+
+                // Then "Ñ" is treated as "N" with a diacritic, which is the English order
+                expect(sorted).toEqual(['Ñu Safari', 'Nuevo Budget', 'Zote Report']);
+            });
+
+            it('should match a plain collator sort for a mix of plain, accented and punctuation names', () => {
+                // Given names that mix the fast key path and the collator path
+                const names = ['Report 10', 'zebra', '#admins', 'Éclair', 'Report 2', "asdwe's expenses", 'Ölbaum', 'alpha', 'Привет', 'Ñandú', 'nube', 'B 1'];
+
+                for (const locale of ['en', 'es', 'de', 'sv', 'pl']) {
+                    // When they are sorted through the LHN comparator
+                    const sorted = sortPinned(names, locale);
+
+                    // Then the order is exactly what the collator alone gives, so the fast path never drifts from it
+                    const collator = new Intl.Collator(locale, {usage: 'sort', sensitivity: 'variant', numeric: true, caseFirst: 'upper'});
+                    expect(sorted).toEqual([...names].sort(collator.compare));
+                }
+            });
+        });
+
+        describe('buildSortKey', () => {
+            it('should not build a key for names whose code-unit order differs from the collator', () => {
+                // Given names with accents, non-Latin letters, punctuation or a digit run longer than the padding
+                const names = ['Café', 'Ñu Safari', 'Привет', "asdwe's expenses", '#admins', 'Report 12345678901234567'];
+
+                // Then none of them get a key, so they are compared with the collator
+                for (const name of names) {
+                    expect(_buildSortKey(name)).toBeUndefined();
+                }
             });
 
             it('should be case-insensitive', () => {

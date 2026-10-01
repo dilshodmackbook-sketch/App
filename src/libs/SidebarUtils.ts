@@ -97,11 +97,13 @@ function compareStringDates(a: string, b: string): 0 | 1 | -1 {
 
 const NUMERIC_PAD_WIDTH = 15;
 const DIGIT_SEQUENCE = /\d+/g;
+const PLAIN_NAME_REGEX = /^[A-Za-z0-9 ]*$/;
+const LONG_DIGIT_RUN_REGEX = /\d{16,}/;
 
 /**
  * Persists across renders so sort keys are computed at most once per unique display name.
  */
-const sortKeyCache = new Map<string, string>();
+const sortKeyCache = new Map<string, string | undefined>();
 
 /**
  * Reports already reported by the `[ChatReportLHN]` diagnostic log, so a stuck row is logged once per session
@@ -114,15 +116,18 @@ const loggedChatReportIDs = new Set<string>();
  * Lowercases the name and zero-pads numeric segments ("Report 2" → "report 000000000000002")
  * so that numeric ordering is preserved without Intl.Collator.
  *
+ * Only names made of ASCII letters, digits and spaces get a key, since only for those the key order matches
+ * the collator. Other names return undefined and are compared with the collator.
+ *
  * Results are cached at module level so each unique name pays the cost only once.
  */
-function buildSortKey(displayName: string): string {
-    const cached = sortKeyCache.get(displayName);
-    if (cached !== undefined) {
-        return cached;
+function buildSortKey(displayName: string): string | undefined {
+    if (sortKeyCache.has(displayName)) {
+        return sortKeyCache.get(displayName);
     }
 
-    const key = displayName.toLowerCase().replaceAll(DIGIT_SEQUENCE, (match) => match.padStart(NUMERIC_PAD_WIDTH, '0'));
+    const isPlainName = PLAIN_NAME_REGEX.test(displayName) && !LONG_DIGIT_RUN_REGEX.test(displayName);
+    const key = isPlainName ? displayName.toLowerCase().replaceAll(DIGIT_SEQUENCE, (match) => match.padStart(NUMERIC_PAD_WIDTH, '0')) : undefined;
     sortKeyCache.set(displayName, key);
     return key;
 }
@@ -134,7 +139,7 @@ function buildSortKey(displayName: string): string {
 type MiniReport = {
     reportID?: string;
     displayName: string;
-    sortKey: string;
+    sortKey: string | undefined;
     lastVisibleActionCreated?: string;
 };
 
@@ -515,16 +520,13 @@ function sortCategorizedReports(
     const {pinnedAndGBRReports, errorReports, draftReports, nonArchivedReports, archivedReports} = categories;
 
     const compareDisplayNames = (a: MiniReport, b: MiniReport) => {
-        if (a.sortKey < b.sortKey) {
-            return -1;
-        }
-        if (a.sortKey > b.sortKey) {
-            return 1;
+        if (a.sortKey !== undefined && b.sortKey !== undefined && a.sortKey !== b.sortKey) {
+            return a.sortKey < b.sortKey ? -1 : 1;
         }
         if (!a.displayName || !b.displayName) {
             return 0;
         }
-        // Sort keys tied — fall back to Collator for locale-correct ordering
+        // Sort keys tied or missing — fall back to Collator for locale-correct ordering
         return localeCompare(a.displayName, b.displayName);
     };
 
