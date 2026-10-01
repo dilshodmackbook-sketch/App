@@ -4372,7 +4372,7 @@ describe('SidebarUtils', () => {
                     nonArchivedReports: [],
                     archivedReports: [],
                 };
-                return _sortCategorizedReports(categories, true, collator.compare).pinnedAndGBRReports.map((report) => report.displayName);
+                return _sortCategorizedReports(categories, true, (a, b) => collator.compare(a, b)).pinnedAndGBRReports.map((report) => report.displayName);
             };
 
             it('should place a locale-specific letter in its Spanish position instead of after Z', () => {
@@ -4407,7 +4407,7 @@ describe('SidebarUtils', () => {
 
                     // Then the order is exactly what the collator alone gives, so the fast path never drifts from it
                     const collator = new Intl.Collator(locale, {usage: 'sort', sensitivity: 'variant', numeric: true, caseFirst: 'upper'});
-                    expect(sorted).toEqual([...names].sort(collator.compare));
+                    expect(sorted).toEqual([...names].sort((a, b) => collator.compare(a, b)));
                 }
             });
         });
@@ -4441,7 +4441,8 @@ describe('SidebarUtils', () => {
                 const report10 = _buildSortKey('Report 10');
 
                 // Then "Report 2" sorts before "Report 10"
-                expect(report2 < report10).toBe(true);
+                expect(report2).toBe('report 000000000000002');
+                expect(report10).toBe('report 000000000000010');
             });
         });
 
