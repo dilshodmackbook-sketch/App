@@ -4415,12 +4415,20 @@ describe('SidebarUtils', () => {
         describe('buildSortKey', () => {
             it('should not build a key for names whose code-unit order differs from the collator', () => {
                 // Given names with accents, non-Latin letters, punctuation or a digit run longer than the padding
-                const names = ['Café', 'Ñu Safari', 'Привет', "asdwe's expenses", '#admins', 'Report 12345678901234567'];
+                const names = ['Café', 'Ñu Safari', 'Привет', '#admins', 'Team.Ops', 'Report 12345678901234567'];
 
                 // Then none of them get a key, so they are compared with the collator
                 for (const name of names) {
                     expect(_buildSortKey(name)).toBeUndefined();
                 }
+            });
+
+            it('should build a key for names with apostrophes', () => {
+                // Given a personal expense chat name, which is common in the LHN and orders the same by code unit and collator
+                const key = _buildSortKey("Asdwe's expenses");
+
+                // Then it stays on the fast key path
+                expect(key).toBe("asdwe's expenses");
             });
 
             it('should be case-insensitive', () => {

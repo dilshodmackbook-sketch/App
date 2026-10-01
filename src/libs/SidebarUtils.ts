@@ -97,7 +97,7 @@ function compareStringDates(a: string, b: string): 0 | 1 | -1 {
 
 const NUMERIC_PAD_WIDTH = 15;
 const DIGIT_SEQUENCE = /\d+/g;
-const PLAIN_NAME_REGEX = /^[A-Za-z0-9 ]*$/;
+const PLAIN_NAME_REGEX = /^[A-Za-z0-9 ']*$/;
 const LONG_DIGIT_RUN_REGEX = /\d{16,}/;
 
 /**
@@ -116,7 +116,7 @@ const loggedChatReportIDs = new Set<string>();
  * Lowercases the name and zero-pads numeric segments ("Report 2" → "report 000000000000002")
  * so that numeric ordering is preserved without Intl.Collator.
  *
- * Only names made of ASCII letters, digits and spaces get a key, since only for those the key order matches
+ * Only names made of ASCII letters, digits, spaces and apostrophes get a key, since only for those the key order matches
  * the collator. Other names return undefined and are compared with the collator.
  *
  * Results are cached at module level so each unique name pays the cost only once.
