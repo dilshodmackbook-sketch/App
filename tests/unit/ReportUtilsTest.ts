@@ -12171,6 +12171,70 @@ describe('ReportUtils', () => {
             expect(result?.actionBadge).toBe(CONST.REPORT.ACTION_BADGE.APPROVE);
         });
 
+        it('should keep the Approve badge on an approver expense report row that has an unread mention', async () => {
+            // Given a submitted expense report the approver can only see on its own (no parent access), where someone
+            // just @mentioned the approver on that report, which is the usual way people chase an approval
+            const policyID = 'mentionPolicy123';
+            const fakePolicy: Policy = {
+                ...createRandomPolicy(1),
+                id: policyID,
+                approvalMode: CONST.POLICY.APPROVAL_MODE.BASIC,
+                type: CONST.POLICY.TYPE.TEAM,
+            };
+            const expenseReport: Report = {
+                ...createExpenseReport(60001),
+                policyID,
+                hasParentAccess: false,
+                managerID: currentUserAccountID,
+                stateNum: CONST.REPORT.STATE_NUM.SUBMITTED,
+                statusNum: CONST.REPORT.STATUS_NUM.SUBMITTED,
+                type: CONST.REPORT.TYPE.EXPENSE,
+                lastReadTime: '2024-03-01 12:00:00.000',
+                lastMentionedTime: '2024-03-01 12:00:01.000',
+            };
+            const fakeTransaction: Transaction = {
+                ...createRandomTransaction(1),
+                reportID: expenseReport.reportID,
+                amount: 100,
+                status: CONST.TRANSACTION.STATUS.POSTED,
+                bank: '',
+            };
+            await Onyx.merge(ONYXKEYS.SESSION, {email: currentUserEmail, accountID: currentUserAccountID});
+            await Onyx.set(`${ONYXKEYS.COLLECTION.POLICY}${policyID}`, fakePolicy);
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${expenseReport.reportID}`, expenseReport);
+            await Onyx.set(`${ONYXKEYS.COLLECTION.TRANSACTION}${fakeTransaction.transactionID}`, fakeTransaction);
+            await waitForBatchedUpdates();
+
+            // When the attention reason is computed for the approver while the mention is still unread
+            const {result: isReportArchived} = renderHook(() => useReportIsArchived(expenseReport?.reportID));
+            const result = getReasonAndReportActionThatRequiresAttention(expenseReport, currentUserEmail, currentUserAccountID, undefined, isReportArchived.current);
+
+            // Then the row still carries the Approve badge instead of collapsing to a bare green dot
+            expect(result?.reason).toBe(CONST.REQUIRES_ATTENTION_REASONS.IS_WAITING_FOR_ASSIGNEE_TO_COMPLETE_ACTION);
+            expect(result?.actionBadge).toBe(CONST.REPORT.ACTION_BADGE.APPROVE);
+        });
+
+        it('should still return the unread mention reason for an invoice room with no other action', async () => {
+            // Given an invoice room where the user has an unread mention and nothing else to do
+            const invoiceRoom: Report = {
+                ...createRandomReport(60002, undefined),
+                type: CONST.REPORT.TYPE.CHAT,
+                chatType: CONST.REPORT.CHAT_TYPE.INVOICE,
+                hasOutstandingChildRequest: false,
+                lastReadTime: '2024-03-01 12:00:00.000',
+                lastMentionedTime: '2024-03-01 12:00:01.000',
+            };
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${invoiceRoom.reportID}`, invoiceRoom);
+            await waitForBatchedUpdates();
+
+            // When the attention reason is computed
+            const result = getReasonAndReportActionThatRequiresAttention(invoiceRoom, currentUserEmail, currentUserAccountID);
+
+            // Then the mention still lights the green dot, because the invoice room branch must not swallow it
+            expect(result?.reason).toBe(CONST.REQUIRES_ATTENTION_REASONS.IS_UNREAD_WITH_MENTION);
+            expect(result?.actionBadge).toBeUndefined();
+        });
+
         it('should use allReportActionsParam when provided instead of module-level Onyx data', async () => {
             // Given a submitted expense report with a DEW_APPROVE_FAILED action stored ONLY in the passed param (not in Onyx),
             // with the current user as the manager so it passes the approver gate on the DEW branch
