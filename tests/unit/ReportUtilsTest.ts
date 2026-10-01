@@ -133,6 +133,7 @@ import {
     getPolicyExpenseChat,
     getPolicyIDsWithEmptyReportsForAccount,
     getPolicyName,
+    generateReportAttributes,
     getReasonAndReportActionThatRequiresAttention,
     getReimbursableTotal,
     getReimbursementDeQueuedOrCanceledActionMessage,
@@ -12058,6 +12059,98 @@ describe('ReportUtils', () => {
 
                 expect(canDeleteTransaction(closedReport, undefined, false)).toBe(false);
             });
+        });
+    });
+
+    describe('mention on a single-expense report', () => {
+        // A comment on a single-expense report is posted to its hidden transaction thread, so the mention lands there
+        const submitterAccountID = 81002;
+        const expenseReportID = '81000';
+        const threadReportID = '81001';
+        const transactionID = '81003';
+        const buildData = (threadLastReadTime: string) => {
+            const expenseReport: Report = {
+                ...createExpenseReport(Number(expenseReportID)),
+                type: CONST.REPORT.TYPE.EXPENSE,
+                ownerAccountID: submitterAccountID,
+                managerID: submitterAccountID,
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+                lastReadTime: '2024-03-01 12:00:00.000',
+            };
+            const iouAction: ReportAction = {
+                ...createRandomReportAction(1),
+                reportActionID: '81004',
+                actionName: CONST.REPORT.ACTIONS.TYPE.IOU,
+                childReportID: threadReportID,
+                created: '2024-03-01 11:00:00.000',
+                originalMessage: {IOUTransactionID: transactionID, IOUReportID: expenseReportID, type: CONST.IOU.REPORT_ACTION_TYPE.CREATE, amount: 100, currency: CONST.CURRENCY.USD},
+            } as ReportAction;
+            const threadReport: Report = {
+                ...createRandomReport(Number(threadReportID), undefined),
+                type: CONST.REPORT.TYPE.CHAT,
+                parentReportID: expenseReportID,
+                parentReportActionID: iouAction.reportActionID,
+                lastReadTime: threadLastReadTime,
+                lastMentionedTime: '2024-03-01 12:00:05.000',
+            };
+            const reportActions: OnyxCollection<ReportActions> = {
+                [`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${expenseReportID}`]: {[iouAction.reportActionID]: iouAction},
+            };
+            const reports: OnyxCollection<Report> = {
+                [`${ONYXKEYS.COLLECTION.REPORT}${expenseReportID}`]: expenseReport,
+                [`${ONYXKEYS.COLLECTION.REPORT}${threadReportID}`]: threadReport,
+            };
+            const transaction: Transaction = {...createRandomTransaction(Number(transactionID)), transactionID, reportID: expenseReportID};
+            return {expenseReport, reportActions, reports, transaction};
+        };
+
+        it('should flag the expense report row when the current user is mentioned in its hidden transaction thread', async () => {
+            // Given a single-expense report where someone mentioned the current user in the expense detail view,
+            // so only the hidden transaction thread carries lastMentionedTime
+            const {expenseReport, reportActions, reports, transaction} = buildData('2024-03-01 12:00:00.000');
+            await Onyx.set(`${ONYXKEYS.COLLECTION.TRANSACTION}${transactionID}`, transaction);
+            await waitForBatchedUpdates();
+
+            // When the LHN attributes are generated for the expense report row
+            const attributes = generateReportAttributes({
+                report: expenseReport,
+                chatReport: undefined,
+                reportActions,
+                transactionViolations: {},
+                isReportArchived: false,
+                allTransactions: {[`${ONYXKEYS.COLLECTION.TRANSACTION}${transactionID}`]: transaction},
+                reports,
+                currentUserLogin: currentUserEmail,
+                currentUserAccountID,
+            });
+
+            // Then the row requires attention for the unread mention instead of showing nothing
+            expect(attributes.oneTransactionThreadReportID).toBe(threadReportID);
+            expect(attributes.requiresAttention).toBe(true);
+        });
+
+        it('should clear the flag once the hidden transaction thread has been read', async () => {
+            // Given the same report after the user opened it, which moved the thread's lastReadTime past the mention
+            const {expenseReport, reportActions, reports, transaction} = buildData('2024-03-01 12:00:06.000');
+            await Onyx.set(`${ONYXKEYS.COLLECTION.TRANSACTION}${transactionID}`, transaction);
+            await waitForBatchedUpdates();
+
+            // When the LHN attributes are generated again
+            const attributes = generateReportAttributes({
+                report: expenseReport,
+                chatReport: undefined,
+                reportActions,
+                transactionViolations: {},
+                isReportArchived: false,
+                allTransactions: {[`${ONYXKEYS.COLLECTION.TRANSACTION}${transactionID}`]: transaction},
+                reports,
+                currentUserLogin: currentUserEmail,
+                currentUserAccountID,
+            });
+
+            // Then the row no longer asks for attention
+            expect(attributes.requiresAttention).toBe(false);
         });
     });
 

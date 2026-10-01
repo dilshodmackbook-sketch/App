@@ -4533,13 +4533,18 @@ function getActionTypeForAssigneeToComplete(
     return undefined;
 }
 
-function isUnreadWithMention(reportOrOption: OnyxEntry<Report> | OptionData): boolean {
+// We need oneTransactionThreadReport because a comment on a single-expense report is posted to its hidden transaction thread
+function isUnreadWithMention(reportOrOption: OnyxEntry<Report> | OptionData, oneTransactionThreadReport?: OnyxEntry<Report>): boolean {
     if (!reportOrOption) {
         return false;
     }
     // lastMentionedTime and lastReadTime are both datetime strings and can be compared directly
-    const lastMentionedTime = reportOrOption.lastMentionedTime ?? '';
-    const lastReadTime = reportOrOption.lastReadTime ?? '';
+    const reportLastMentionedTime = reportOrOption.lastMentionedTime ?? '';
+    const threadLastMentionedTime = oneTransactionThreadReport?.lastMentionedTime ?? '';
+    const lastMentionedTime = reportLastMentionedTime > threadLastMentionedTime ? reportLastMentionedTime : threadLastMentionedTime;
+    const reportLastReadTime = reportOrOption.lastReadTime ?? '';
+    const threadLastReadTime = oneTransactionThreadReport?.lastReadTime ?? '';
+    const lastReadTime = reportLastReadTime > threadLastReadTime ? reportLastReadTime : threadLastReadTime;
     return !!('isUnreadWithMention' in reportOrOption && reportOrOption.isUnreadWithMention) || lastReadTime < lastMentionedTime;
 }
 
@@ -4577,6 +4582,7 @@ function getReasonAndReportActionThatRequiresAttention(
     reports?: OnyxCollection<Report>,
     policiesParam?: OnyxCollection<Policy>,
     reportMetadataParam?: OnyxEntry<ReportMetadata>,
+    oneTransactionThreadReport?: OnyxEntry<Report>,
 ): ReasonAndReportActionThatRequiresAttention | null {
     if (!optionOrReport) {
         return null;
@@ -4617,7 +4623,7 @@ function getReasonAndReportActionThatRequiresAttention(
         };
     }
 
-    if (isUnreadWithMention(optionOrReport)) {
+    if (isUnreadWithMention(optionOrReport, oneTransactionThreadReport)) {
         return {
             reason: CONST.REQUIRES_ATTENTION_REASONS.IS_UNREAD_WITH_MENTION,
         };
@@ -13770,6 +13776,7 @@ function generateReportAttributes({
             reports,
             policies,
             reportMetadata,
+            oneTransactionThreadReportID ? reports?.[`${ONYXKEYS.COLLECTION.REPORT}${oneTransactionThreadReportID}`] : undefined,
         ) ?? {};
 
     return {
