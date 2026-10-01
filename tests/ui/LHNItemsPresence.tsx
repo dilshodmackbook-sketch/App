@@ -825,5 +825,77 @@ describe('SidebarLinksData', () => {
             // And the GRB icon should be shown, indicating there is unread mention.
             expect(screen.getByTestId('GBR Icon', {includeHiddenElements: true})).toBeOnTheScreen();
         });
+
+        it('should display the GBR on a single-expense report when the mention is in its hidden transaction thread', async () => {
+            // Given a single-expense report someone else owns, where the current user has nothing to approve or pay
+            LHNTestUtils.getDefaultRenderedSidebarLinks();
+            const submitterAccountID = 2;
+            const expenseReport: Report = {
+                ...buildOptimisticExpenseReport({
+                    rules: undefined,
+                    chatReportID: chatReportR14932.reportID,
+                    getCurrencyDecimals: TestHelper.getCurrencyDecimalsLocal,
+                    policyID: '123',
+                    payeeAccountID: submitterAccountID,
+                    total: 100,
+                    currency: 'USD',
+                    isASAPSubmitBetaEnabled: true,
+                }),
+                managerID: submitterAccountID,
+                stateNum: CONST.REPORT.STATE_NUM.APPROVED,
+                statusNum: CONST.REPORT.STATUS_NUM.APPROVED,
+                participants: {[TEST_USER_ACCOUNT_ID]: {notificationPreference: 'always'}, [submitterAccountID]: {notificationPreference: 'always'}},
+                lastReadTime: '2025-01-01 00:00:00',
+                lastVisibleActionCreated: '2025-01-01 00:00:00',
+                lastActorAccountID: submitterAccountID,
+            };
+            const expenseTransaction = buildOptimisticTransaction({
+                transactionParams: {
+                    amount: 100,
+                    currency: 'USD',
+                    reportID: expenseReport.reportID,
+                },
+            });
+            const expenseCreatedAction = buildOptimisticIOUReportAction({
+                getCurrencyDecimals: TestHelper.getCurrencyDecimalsLocal,
+                type: 'create',
+                amount: 100,
+                currency: 'USD',
+                comment: '',
+                participants: [],
+                transactionID: expenseTransaction.transactionID,
+                iouReportID: expenseReport.reportID,
+            });
+
+            // And the other participant mentioned the current user on the expense detail view, which posts to the hidden thread
+            const transactionThreadReport: Report = {
+                ...buildTransactionThread(expenseCreatedAction, expenseReport, TEST_USER_ACCOUNT_ID),
+                lastReadTime: '2025-01-01 00:00:00',
+                lastMentionedTime: '2025-01-01 00:00:05',
+                lastVisibleActionCreated: '2025-01-01 00:00:05',
+                lastActorAccountID: submitterAccountID,
+            };
+            expenseCreatedAction.childReportID = transactionThreadReport.reportID;
+
+            // When the reports are loaded into Onyx
+            await initializeState({
+                [`${ONYXKEYS.COLLECTION.REPORT}${expenseReport.reportID}`]: expenseReport,
+                [`${ONYXKEYS.COLLECTION.REPORT}${transactionThreadReport.reportID}`]: transactionThreadReport,
+            });
+            await act(async () => {
+                await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT}${chatReportR14932.reportID}`, chatReportR14932);
+                await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${expenseReport.reportID}`, {
+                    [expenseCreatedAction.reportActionID]: expenseCreatedAction,
+                });
+                await Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${expenseTransaction.transactionID}`, expenseTransaction);
+            });
+            await waitForBatchedUpdatesWithAct();
+
+            // Then the expense report row is listed as unread
+            expect(getDisplayNames()).toHaveLength(1);
+
+            // And it shows the GBR for the unread mention, not only the bold unread style
+            expect(screen.getByTestId('GBR Icon', {includeHiddenElements: true})).toBeOnTheScreen();
+        });
     });
 });
