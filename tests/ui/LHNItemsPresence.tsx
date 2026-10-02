@@ -389,6 +389,58 @@ describe('SidebarLinksData', () => {
             expect(screen.getByTestId('GBR Icon', {includeHiddenElements: true})).toBeOnTheScreen();
         });
 
+        it('should display a hidden DM once its pending expense posts and the DM starts requiring attention', async () => {
+            // Given the sidebar already shows a pinned chat, so later updates go through the incremental LHN path
+            LHNTestUtils.getDefaultRenderedSidebarLinks();
+            const pinnedReport = createReport(true, [1, 2]);
+            const payeeAccountID = 3;
+            const dmReport: Report = {
+                ...createReport(false, [1, 3]),
+                hasOutstandingChildRequest: true,
+                participants: {
+                    [TEST_USER_ACCOUNT_ID]: {notificationPreference: CONST.REPORT.NOTIFICATION_PREFERENCE.HIDDEN},
+                    [payeeAccountID]: {notificationPreference: CONST.REPORT.NOTIFICATION_PREFERENCE.ALWAYS},
+                },
+            };
+            const iouReport: Report = {
+                ...createReport(false, [1, 3]),
+                type: CONST.REPORT.TYPE.IOU,
+                chatReportID: dmReport.reportID,
+                parentReportID: dmReport.reportID,
+                ownerAccountID: payeeAccountID,
+                managerID: TEST_USER_ACCOUNT_ID,
+            };
+            dmReport.iouReportID = iouReport.reportID;
+            const transaction = {
+                ...buildOptimisticTransaction({transactionParams: {amount: 100, currency: CONST.CURRENCY.USD, reportID: iouReport.reportID}}),
+                status: CONST.TRANSACTION.STATUS.PENDING,
+            };
+
+            // And the DM only owes a pending card expense, so it is hidden and does not require attention yet
+            await act(async () => {
+                await Onyx.set(`${ONYXKEYS.COLLECTION.TRANSACTION}${transaction.transactionID}`, transaction);
+            });
+            await initializeState({
+                [`${ONYXKEYS.COLLECTION.REPORT}${pinnedReport.reportID}`]: pinnedReport,
+                [`${ONYXKEYS.COLLECTION.REPORT}${dmReport.reportID}`]: dmReport,
+                [`${ONYXKEYS.COLLECTION.REPORT}${iouReport.reportID}`]: iouReport,
+            });
+            const rowsBefore = getOptionRows().length;
+            const reportAttributesBefore = await getOnyxValue(ONYXKEYS.DERIVED.REPORT_ATTRIBUTES);
+            expect(reportAttributesBefore?.reports?.[dmReport.reportID]?.requiresAttention).toBe(false);
+
+            // When the expense posts, which only touches the transaction and not the DM report itself
+            await act(async () => {
+                await Onyx.merge(`${ONYXKEYS.COLLECTION.TRANSACTION}${transaction.transactionID}`, {status: CONST.TRANSACTION.STATUS.POSTED});
+            });
+            await waitForBatchedUpdatesWithAct();
+
+            // Then the derived attributes flip and the DM shows up in the LHN without a reload
+            const reportAttributesAfter = await getOnyxValue(ONYXKEYS.DERIVED.REPORT_ATTRIBUTES);
+            expect(reportAttributesAfter?.reports?.[dmReport.reportID]?.requiresAttention).toBe(true);
+            expect(getOptionRows()).toHaveLength(rowsBefore + 1);
+        });
+
         it('should display the archived report in the default mode', async () => {
             // Given the SidebarLinks are rendered.
             LHNTestUtils.getDefaultRenderedSidebarLinks();
