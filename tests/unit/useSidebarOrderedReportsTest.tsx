@@ -10,6 +10,7 @@ import SidebarUtils from '@libs/SidebarUtils';
 import CONST from '@src/CONST';
 import ONYXKEYS from '@src/ONYXKEYS';
 import type {Report} from '@src/types/onyx';
+import type {ReportAttributes} from '@src/types/onyx/DerivedValues';
 
 import type {OnyxMultiSetInput} from 'react-native-onyx';
 
@@ -426,5 +427,88 @@ describe('useSidebarOrderedReports', () => {
         });
 
         expect(fullRecomputeCall).toBeUndefined();
+    });
+    it('should re-check a hidden chat when its report attributes hydrate after the report', async () => {
+        // Given a displayed chat and a new DM that was filtered out because its attributes were not computed yet
+        const displayedReports = createMockReports({
+            report1: {reportName: 'Chat A'},
+        });
+        mockSidebarUtils.getReportsToDisplayInLHN.mockReturnValue(displayedReports);
+        mockSidebarUtils.updateReportsToDisplayInLHN.mockImplementation(({displayedReports: reports}) => reports);
+
+        await act(async () => {
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}1`, displayedReports['1']);
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}2`, {
+                reportID: '2',
+                type: CONST.REPORT.TYPE.CHAT,
+            } as Report);
+            await Onyx.set(ONYXKEYS.DERIVED.REPORT_ATTRIBUTES, {
+                reports: {},
+                locale: null,
+            });
+        });
+        renderHook(() => useSidebarOrderedReports(), {wrapper: TestWrapper});
+        await waitForBatchedUpdatesWithAct();
+        mockSidebarUtils.updateReportsToDisplayInLHN.mockClear();
+
+        // When only the derived attributes arrive and mark the DM as needing attention
+        await act(async () => {
+            const dmReportID = '2';
+            const dmAttributes: ReportAttributes = {
+                reportName: 'DM',
+                isEmpty: false,
+                requiresAttention: true,
+                brickRoadStatus: undefined,
+                reportErrors: {},
+            };
+            await Onyx.set(ONYXKEYS.DERIVED.REPORT_ATTRIBUTES, {
+                reports: {[dmReportID]: dmAttributes},
+                locale: null,
+            });
+        });
+        await waitForBatchedUpdatesWithAct();
+
+        // Then the DM key is handed to the incremental updater so it can be inserted into the LHN
+        const keys = mockSidebarUtils.updateReportsToDisplayInLHN.mock.calls.flatMap((call) => call[0]?.updatedReportsKeys ?? []);
+        expect(keys).toContain(`${ONYXKEYS.COLLECTION.REPORT}2`);
+    });
+
+    it('should not re-check chats when report attributes change without a visibility field changing', async () => {
+        // Given many chats whose attributes are already hydrated
+        const displayedReports = createMockReports({
+            report1: {reportName: 'Chat A'},
+        });
+        const attrs = (name: string) => {
+            const reports: Record<string, ReportAttributes> = {};
+            for (let i = 1; i <= 500; i++) {
+                reports[`${i}`] = {
+                    reportName: `${name}${i}`,
+                    isEmpty: false,
+                    requiresAttention: false,
+                    brickRoadStatus: undefined,
+                    reportErrors: {},
+                };
+            }
+            return {reports, locale: null};
+        };
+        mockSidebarUtils.getReportsToDisplayInLHN.mockReturnValue(displayedReports);
+        mockSidebarUtils.updateReportsToDisplayInLHN.mockImplementation(({displayedReports: reports}) => reports);
+        await act(async () => {
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}1`, displayedReports['1']);
+            await Onyx.set(ONYXKEYS.DERIVED.REPORT_ATTRIBUTES, attrs('a'));
+        });
+        renderHook(() => useSidebarOrderedReports(), {wrapper: TestWrapper});
+        await waitForBatchedUpdatesWithAct();
+        mockSidebarUtils.updateReportsToDisplayInLHN.mockClear();
+
+        // When the derived value is rewritten with fresh objects and only non-visibility fields differ
+        await act(async () => {
+            await Onyx.set(ONYXKEYS.DERIVED.REPORT_ATTRIBUTES, attrs('b'));
+        });
+        await waitForBatchedUpdatesWithAct();
+
+        // Then no chat is re-queued, so this does not turn into a full LHN scan
+        const keys = mockSidebarUtils.updateReportsToDisplayInLHN.mock.calls.flatMap((call) => call[0]?.updatedReportsKeys ?? []);
+        expect(keys.length).toBeLessThanOrEqual(1);
     });
 });
