@@ -312,8 +312,17 @@ function WorkflowsApprovalsTab({policyID}: WorkflowsApprovalsTabProps) {
         );
     }, [isWorkflowFromIntegration, workflowSourceName, navigateToWorkflowSourceSettings, styles.lh20, styles.mr5, styles.mt1, styles.textLabelSupportingEmptyValue, translate]);
 
-    const approvalOptionSubtitle = isWorkflowFromIntegration || !isSmartLimitEnabled ? approvalSubtitle : translate('workspace.moreFeatures.workflows.disableApprovalPrompt');
     const hasApprovalError = !!policy?.errorFields?.approvalMode;
+    // Submit2026 workspaces have approval mode set to Advanced, but we want to show it here as off because configuring the advanced approvals is a paid feature.
+    const isApprovalsToggleOn =
+        !isSubmitPolicyWorkspace &&
+        (isWorkflowFromIntegration ||
+            isDEWEnabled ||
+            (([CONST.POLICY.APPROVAL_MODE.BASIC, CONST.POLICY.APPROVAL_MODE.ADVANCED].some((approvalMode) => approvalMode === policy?.approvalMode) && !hasApprovalError) ?? false));
+    // The switch can only emit !isOn, so lock it only when a press would disable approvals.
+    const isApprovalsDisableLockedBySmartLimit = isSmartLimitEnabled && isApprovalsToggleOn;
+    const approvalOptionSubtitle =
+        isWorkflowFromIntegration || !isApprovalsDisableLockedBySmartLimit ? approvalSubtitle : translate('workspace.moreFeatures.workflows.disableApprovalPrompt');
 
     const getAddApprovalsToggleDisabledAction = () => {
         if (isWorkflowFromIntegration) {
@@ -326,7 +335,9 @@ function WorkflowsApprovalsTab({policyID}: WorkflowsApprovalsTabProps) {
         <WorkflowsSectionCard
             title={translate('workflowsPage.addApprovalsTitle')}
             subtitle={approvalOptionSubtitle}
-            switchAccessibilityLabel={isSmartLimitEnabled ? translate('workspace.moreFeatures.workflows.disableApprovalPrompt') : translate('workflowsPage.addApprovalsDescription')}
+            switchAccessibilityLabel={
+                isApprovalsDisableLockedBySmartLimit ? translate('workspace.moreFeatures.workflows.disableApprovalPrompt') : translate('workflowsPage.addApprovalsDescription')
+            }
             onToggle={(isEnabled: boolean) => {
                 if (!canWriteApprovals) {
                     showReadOnlyModal();
@@ -475,16 +486,10 @@ function WorkflowsApprovalsTab({policyID}: WorkflowsApprovalsTabProps) {
                     )}
                 </>
             }
-            disabled={!canWriteApprovals || isSmartLimitEnabled || isDEWEnabled || isWorkflowFromIntegration}
+            disabled={!canWriteApprovals || isApprovalsDisableLockedBySmartLimit || isDEWEnabled || isWorkflowFromIntegration}
             disabledAction={withApprovalsReadOnlyFallback(getAddApprovalsToggleDisabledAction())}
             showLockIcon={!canWriteApprovals}
-            // Submit2026 workspaces have approval mode set to Advanced, but we want to show it here as off because configuring the advanced approvals is a paid feature.
-            isActive={
-                !isSubmitPolicyWorkspace &&
-                (isWorkflowFromIntegration ||
-                    isDEWEnabled ||
-                    (([CONST.POLICY.APPROVAL_MODE.BASIC, CONST.POLICY.APPROVAL_MODE.ADVANCED].some((approvalMode) => approvalMode === policy?.approvalMode) && !hasApprovalError) ?? false))
-            }
+            isActive={isApprovalsToggleOn}
             pendingAction={policy?.pendingFields?.approvalMode}
             errors={getLatestErrorField(policy ?? {}, CONST.POLICY.COLLECTION_KEYS.APPROVAL_MODE)}
             onCloseError={() => clearPolicyErrorField(policyID, CONST.POLICY.COLLECTION_KEYS.APPROVAL_MODE)}

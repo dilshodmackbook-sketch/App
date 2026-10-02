@@ -605,7 +605,7 @@ function WorkspaceMoreFeaturesPage({policy, route}: WorkspaceMoreFeaturesPagePro
                             subtitle={translate('workspace.moreFeatures.workflows.subtitle')}
                             isActive={policy?.areWorkflowsEnabled ?? false}
                             pendingAction={policy?.pendingFields?.areWorkflowsEnabled}
-                            disabled={!canWriteMoreFeatures || isSmartLimitEnabled}
+                            disabled={!canWriteMoreFeatures || (isSmartLimitEnabled && !!policy?.areWorkflowsEnabled)}
                             disabledAction={withReadOnlyFallback(promptDisableSmartLimitForWorkflows)}
                             onToggle={(isEnabled) => {
                                 if (!policyID) {
