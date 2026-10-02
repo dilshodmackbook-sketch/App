@@ -4,7 +4,7 @@ import type {MarkAllMessagesAsReadParams} from '@libs/API/parameters';
 import {WRITE_COMMANDS} from '@libs/API/types';
 import {getDBTimeWithSkew, getIsOffline} from '@libs/NetworkState';
 import {getOneTransactionThreadReportID} from '@libs/ReportActionsUtils';
-import {isArchivedReport, isUnread} from '@libs/ReportUtils';
+import {getReportLastVisibleActionCreated, isArchivedReport, isUnread} from '@libs/ReportUtils';
 
 import ONYXKEYS from '@src/ONYXKEYS';
 import type {Report, ReportActions, ReportAttributesDerivedValue} from '@src/types/onyx';
@@ -44,16 +44,18 @@ function markAllMessagesAsRead(
         return;
     }
 
-    const newLastReadTime = getDBTimeWithSkew();
     // Read the in-memory offline state directly since this is an imperative one-shot action (reactivity is not needed here).
     const isOffline = getIsOffline();
 
     type PartialReport = {
-        lastReadTime: Report['lastReadTime'] | null;
+        lastReadTime?: Report['lastReadTime'] | null;
+        manuallyMarkedUnreadReportActionID?: Report['manuallyMarkedUnreadReportActionID'] | null;
     };
     const optimisticReports: Record<string, PartialReport> = {};
     const failureReports: Record<string, PartialReport> = {};
     const reportIDList: string[] = [];
+    // Newest server-stamped time among the marked reports, so the read time can never be ahead of the server clock
+    let newestServerTime = '';
     const reportsToMark = reportIDs ? reportIDs.map((reportID) => allReports?.[`${ONYXKEYS.COLLECTION.REPORT}${reportID}`]) : Object.values(allReports ?? {});
     for (const report of reportsToMark) {
         if (!report) {
@@ -68,14 +70,24 @@ function markAllMessagesAsRead(
             continue;
         }
 
+        for (const serverTime of [getReportLastVisibleActionCreated(report, oneTransactionThreadReport), report.lastMentionedTime ?? '']) {
+            if (serverTime > newestServerTime) {
+                newestServerTime = serverTime;
+            }
+        }
+
         const reportKey = `${ONYXKEYS.COLLECTION.REPORT}${report.reportID}`;
-        optimisticReports[reportKey] = {lastReadTime: newLastReadTime};
-        failureReports[reportKey] = {lastReadTime: report.lastReadTime ?? null};
+        failureReports[reportKey] = {lastReadTime: report.lastReadTime ?? null, manuallyMarkedUnreadReportActionID: report.manuallyMarkedUnreadReportActionID ?? null};
         reportIDList.push(report.reportID);
     }
 
     if (reportIDList.length === 0) {
         return;
+    }
+
+    const newLastReadTime = newestServerTime || getDBTimeWithSkew();
+    for (const reportKey of Object.keys(failureReports)) {
+        optimisticReports[reportKey] = {lastReadTime: newLastReadTime, manuallyMarkedUnreadReportActionID: null};
     }
 
     const optimisticData = [

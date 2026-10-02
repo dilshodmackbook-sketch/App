@@ -3740,6 +3740,76 @@ describe('actions/Report', () => {
             );
             expect(isUnreadCollection.some(Boolean)).toBe(false);
         });
+
+        it('should not send a lastReadTime ahead of the server when the time skew runs ahead', async () => {
+            // Given a time skew that runs 10 minutes ahead, like the round-trip-inflated skew measured on native
+            await Onyx.merge(ONYXKEYS.NETWORK, {timeSkew: 10 * 60 * 1000});
+
+            // And two unread reports whose newest server-stamped time is a mention on the second one
+            const lastVisibleActionCreated = DateUtils.subtractMillisecondsFromDateTime(DateUtils.getDBTime(), 2000);
+            const lastMentionedTime = DateUtils.subtractMillisecondsFromDateTime(DateUtils.getDBTime(), 1000);
+            const firstReport: OnyxTypes.Report = {
+                ...createRandomReport(1, undefined),
+                lastMessageText: 'test',
+                lastActorAccountID: 999,
+                lastReadTime: DateUtils.subtractMillisecondsFromDateTime(lastVisibleActionCreated, 1),
+                lastVisibleActionCreated,
+            };
+            const secondReport: OnyxTypes.Report = {
+                ...createRandomReport(2, undefined),
+                lastMessageText: 'test',
+                lastActorAccountID: 999,
+                lastReadTime: DateUtils.subtractMillisecondsFromDateTime(lastVisibleActionCreated, 1),
+                lastVisibleActionCreated,
+                lastMentionedTime,
+            };
+            const reportCollection: Record<`${typeof ONYXKEYS.COLLECTION.REPORT}${string}`, OnyxTypes.Report> = {
+                [`${ONYXKEYS.COLLECTION.REPORT}${firstReport.reportID}`]: firstReport,
+                [`${ONYXKEYS.COLLECTION.REPORT}${secondReport.reportID}`]: secondReport,
+            };
+            await Onyx.mergeCollection(ONYXKEYS.COLLECTION.REPORT, reportCollection);
+            await waitForBatchedUpdates();
+
+            // When marking all reports as read
+            markAllMessagesAsRead(undefined, undefined, undefined);
+            await waitForBatchedUpdates();
+
+            // Then the request carries the newest server-stamped time instead of the skewed client clock, so the backend doesn't reject it as a future time
+            expect(apiWriteSpy).toHaveBeenCalledWith(
+                WRITE_COMMANDS.MARK_ALL_MESSAGES_AS_READ,
+                {reportIDList: [firstReport.reportID, secondReport.reportID], lastReadTime: lastMentionedTime},
+                expect.anything(),
+            );
+
+            // And both reports are read optimistically, including the mention
+            const firstUpdatedReport = await OnyxUtils.get(`${ONYXKEYS.COLLECTION.REPORT}${firstReport.reportID}`);
+            const secondUpdatedReport = await OnyxUtils.get(`${ONYXKEYS.COLLECTION.REPORT}${secondReport.reportID}`);
+            expect(ReportUtils.isUnread(firstUpdatedReport, undefined, undefined, undefined)).toBe(false);
+            expect(ReportUtils.isUnread(secondUpdatedReport, undefined, undefined, undefined)).toBe(false);
+        });
+
+        it('should clear the manually marked unread action so the New marker goes away', async () => {
+            // Given a report the user manually marked as unread, which pins the New marker to that action
+            const lastVisibleActionCreated = DateUtils.getDBTime();
+            const report: OnyxTypes.Report = {
+                ...createRandomReport(1, undefined),
+                lastMessageText: 'test',
+                lastActorAccountID: 999,
+                lastReadTime: DateUtils.subtractMillisecondsFromDateTime(lastVisibleActionCreated, 1),
+                lastVisibleActionCreated,
+                manuallyMarkedUnreadReportActionID: '123',
+            };
+            await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${report.reportID}`, report);
+
+            // When marking all reports as read
+            markAllMessagesAsRead(undefined, undefined, undefined);
+            await waitForBatchedUpdates();
+
+            // Then the pinned marker is cleared along with the read time
+            const updatedReport = await OnyxUtils.get(`${ONYXKEYS.COLLECTION.REPORT}${report.reportID}`);
+            expect(updatedReport?.manuallyMarkedUnreadReportActionID).toBeFalsy();
+            expect(updatedReport?.lastReadTime).toBe(lastVisibleActionCreated);
+        });
     });
 
     describe('updateDescription', () => {
